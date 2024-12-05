@@ -40,7 +40,7 @@ jobs:
       - name: Build the Ionic App
         run: |
           cd my-ionic-app
-          ionic build -- --base-href /my-ionic-app/
+          ionic build -- --base-href /ionic-app-github-pages/
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

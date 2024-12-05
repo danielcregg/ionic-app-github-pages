@@ -27,7 +27,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v3
         with:
-          node-version: '18'  # Updated to Node.js 18
+          node-version: '18' # Updated to satisfy Angular CLI requirements
 
       - name: Install Dependencies
         run: |
@@ -44,6 +44,8 @@ jobs:
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
+        with:
+          enablement: pages
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

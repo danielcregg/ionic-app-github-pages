@@ -27,7 +27,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v3
         with:
-          node-version: '18' # Updated to satisfy Angular CLI requirements
+          node-version: '18'
 
       - name: Install Dependencies
         run: |
@@ -37,10 +37,14 @@ jobs:
       - name: Install Ionic CLI
         run: npm install -g @ionic/cli
 
+      # Extract repo name from GITHUB_REPOSITORY (which looks like "owner/repo")
+      - name: Extract repo name
+        run: echo "REPO_NAME=${GITHUB_REPOSITORY##*/}" >> $GITHUB_ENV
+
       - name: Build the Ionic App
         run: |
           cd my-ionic-app
-          ionic build -- --base-href /ionic-app-github-pages/
+          ionic build -- --base-href /${{ env.REPO_NAME }}/
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

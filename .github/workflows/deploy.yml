@@ -1,0 +1,63 @@
+name: Deploy Ionic App to GitHub Pages
+
+on:
+  # Run this workflow on every push to main
+  push:
+    branches: ["main"]
+  # Allow manual triggers from the Actions tab
+  workflow_dispatch:
+
+# Set permissions for pages deployment
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      # URL will be populated after deployment
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      # Step 1: Check out your repository code
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Step 2: Set up Node (required for npm and Ionic)
+      - name: Set up Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+
+      # Step 3: Install your project's dependencies
+      - name: Install Dependencies
+        run: |
+          cd my-ionic-app
+          npm install
+
+      # Step 4: Build the Ionic app for production with correct base href
+      - name: Build the Ionic App
+        run: |
+          cd my-ionic-app
+          ionic build -- --base-href /my-ionic-app/
+
+      # Step 5: Set up the GitHub Pages environment in the workflow
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      # Step 6: Upload the build output from www folder as a deployment artifact
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'my-ionic-app/www'
+
+      # Step 7: Deploy the artifact to GitHub Pages
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

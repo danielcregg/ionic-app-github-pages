@@ -24,6 +24,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Extract just the repo name from owner/repo
+      - name: Extract repository name
+        run: echo "REPO_NAME=${GITHUB_REPOSITORY##*/}" >> $GITHUB_ENV
+
+      # Find the Ionic app directory by searching for ionic.config.json
+      - name: Find Ionic project directory
+        id: find-ionic
+        run: |
+          APP_PATH=$(find . -type f -name ionic.config.json -exec dirname {} \; | head -n 1)
+          if [ -z "$APP_PATH" ]; then
+            # If not found, assume the root directory is the app directory
+            APP_PATH="."
+          fi
+          echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
+
       - name: Set up Node
         uses: actions/setup-node@v3
         with:
@@ -31,19 +46,16 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          cd my-ionic-app
+          cd $APP_PATH
           npm install
 
       - name: Install Ionic CLI
         run: npm install -g @ionic/cli
 
-      # Extract repo name from GITHUB_REPOSITORY (which looks like "owner/repo")
-      - name: Extract repo name
-        run: echo "REPO_NAME=${GITHUB_REPOSITORY##*/}" >> $GITHUB_ENV
-
       - name: Build the Ionic App
         run: |
-          cd my-ionic-app
+          cd $APP_PATH
+          # Use the dynamically extracted repository name for the baseHref
           ionic build -- --base-href /${{ env.REPO_NAME }}/
 
       - name: Setup Pages
@@ -54,7 +66,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: 'my-ionic-app/www'
+          path: '${{ env.APP_PATH }}/www'
 
       - name: Deploy to GitHub Pages
         id: deployment

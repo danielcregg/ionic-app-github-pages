@@ -59,6 +59,8 @@ jobs:
             echo "PWA_ALREADY_CONFIGURED=true" >> $GITHUB_ENV
           else
             echo "PWA_ALREADY_CONFIGURED=false" >> $GITHUB_ENV
+          fi
+          fi
 
       - name: Check if app is standalone
         run: |
@@ -67,6 +69,8 @@ jobs:
             echo "IS_STANDALONE=true" >> $GITHUB_ENV
           else
             echo "IS_STANDALONE=false" >> $GITHUB_ENV
+          fi
+          fi
 
       - name: Add PWA support if not configured
         if: ${{ env.PWA_ALREADY_CONFIGURED == 'false' }}
@@ -136,13 +140,12 @@ jobs:
           # Generate all assets
           node create-assets.js
           
-          # Update manifest to include screenshots and icons with proper start_url and scope
-          cat > src/manifest.webmanifest <<EOF
+          # Update manifest to include screenshots and icons
+          cat > src/manifest.webmanifest << 'EOF'
           {
             "name": "My Ionic PWA",
             "short_name": "IonicPWA",
-            "start_url": "/\${REPO_NAME}/index.html",
-            "scope": "/\${REPO_NAME}/",
+            "start_url": "/${REPO_NAME}/index.html",
             "display": "standalone",
             "background_color": "#ffffff",
             "theme_color": "#1976d2",
@@ -234,8 +237,7 @@ jobs:
             echo '{
               "name": "My Ionic PWA",
               "short_name": "IonicPWA",
-              "start_url": "/'${REPO_NAME}'/index.html",
-              "scope": "/'${REPO_NAME}'/",
+              "start_url": "/${REPO_NAME}/",
               "display": "standalone",
               "background_color": "#ffffff",
               "theme_color": "#1976d2",
@@ -313,36 +315,26 @@ jobs:
             mv angular_modified.json angular.json
           fi
 
-      - name: Fix ngsw-config.json if it exists
-        run: |
-          cd $APP_PATH
-          if [ -f "ngsw-config.json" ]; then
-            sed -i "s|\"index\": \"/index.html\"|\"index\": \"/${REPO_NAME}/index.html\"|g" ngsw-config.json
-          fi
-
       - name: Build the Ionic PWA
         run: |
           cd $APP_PATH
-          # Update index.html with correct base href and ensure correct manifest linking
+          # Update index.html with correct base href and manifest path
           sed -i "s|<base href=\"/\">|<base href=\"/${{ env.REPO_NAME }}/\">|" src/index.html
+          sed -i 's|<link rel="manifest" href="manifest.webmanifest">|<link rel="manifest" href="manifest.webmanifest" crossorigin="use-credentials">|' src/index.html
           
-          # Ensure manifest link doesn't start with a slash, so it resolves under the base href
-          # If already correct, this step is benign
-          sed -i 's|<link rel="manifest" href="manifest.webmanifest"|<link rel="manifest" href="manifest.webmanifest"|' src/index.html
-          
-          # Build the application with proper base-href and service worker
+          # Build the application
           ionic build --prod -- --base-href /${{ env.REPO_NAME }}/ --service-worker true
           
-          # Copy index.html to 404.html for GitHub Pages SPA fallback
+          # Update the service worker and create 404.html
           cp www/index.html www/404.html
           
           # Ensure proper routing in service worker
           if [ -f "www/ngsw.json" ]; then
-            # Update the index to include REPO_NAME if not already fixed
             sed -i "s|\"index\":\"/index.html\"|\"index\":\"/${{ env.REPO_NAME }}/index.html\"|g" www/ngsw.json
+            sed -i "s|\"/${{ env.REPO_NAME }}/manifest.webmanifest\"|\"manifest.webmanifest\"|g" www/ngsw.json
           fi
           
-          # Create a .htaccess file for proper routing (though GitHub Pages doesn't natively use .htaccess)
+          # Create a .htaccess file for proper routing
           cat > www/.htaccess << EOF
           RewriteEngine On
           # Handle requests to non-existent files by serving index.html

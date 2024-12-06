@@ -324,33 +324,58 @@ jobs:
           mkdir -p src/environments
           echo "export const environment = { production: true };" > src/environments/environment.prod.ts
           
-          # Update manifest with correct scope and start_url
-          sed -i "s|\"start_url\": \"./\"|\"start_url\": \"/${{ env.REPO_NAME }}/\"|" src/manifest.webmanifest
-          sed -i "s|\"scope\": \"./\"|\"scope\": \"/${{ env.REPO_NAME }}/\"|" src/manifest.webmanifest
+          # Remove existing ngsw-config.json if it exists to avoid conflicts
+          rm -f ngsw-config.json
+          
+          # Create fresh ngsw-config.json
+          cat > ngsw-config.json << EOF
+          {
+            "\$schema": "./node_modules/@angular/service-worker/config/schema.json",
+            "index": "/index.html",
+            "assetGroups": [
+              {
+                "name": "app",
+                "installMode": "prefetch",
+                "resources": {
+                  "files": [
+                    "/favicon.ico",
+                    "/index.html",
+                    "/manifest.webmanifest",
+                    "/*.css",
+                    "/*.js"
+                  ]
+                }
+              },
+              {
+                "name": "assets",
+                "installMode": "lazy",
+                "updateMode": "prefetch",
+                "resources": {
+                  "files": [
+                    "/assets/**"
+                  ]
+                }
+              }
+            ]
+          }
+          EOF
           
           # Update index.html
           sed -i "s|<base href=\"/\">|<base href=\"/${{ env.REPO_NAME }}/\">|" src/index.html
           sed -i 's|<link rel="manifest" href="manifest.webmanifest">|<link rel="manifest" href="manifest.webmanifest" crossorigin="use-credentials">|' src/index.html
           
-          # Add service worker registration script
-          sed -i '/<\/body>/i\  <script>\n    if ("serviceWorker" in navigator) {\n      navigator.serviceWorker.register("ngsw-worker.js")\n        .then(registration => console.log("Service Worker registered:", registration.scope))\n        .catch(error => console.error("Service Worker error:", error));\n    }\n  </script>' src/index.html
-          
           # Build with specific configurations
           ionic build --prod -- --base-href /${{ env.REPO_NAME }}/ --service-worker true
           
-          # Post-build fixes for service worker
+          # Post-build fixes
           cd www
           
           # Update paths in ngsw.json
           if [ -f "ngsw.json" ]; then
-            # Update base href
-            sed -i "s|\"baseHref\":\"\"|\"baseHref\":\"/${{ env.REPO_NAME }}/\"|g" ngsw.json
-            
-            # Add base to all URLs
             jq --arg base "/${{ env.REPO_NAME }}" '.[$base] = .[""]' ngsw.json > ngsw.tmp.json && mv ngsw.tmp.json ngsw.json
           fi
           
-          # Create 404.html for GitHub Pages
+          # Create 404.html
           cp index.html 404.html
 
       - name: Setup Pages

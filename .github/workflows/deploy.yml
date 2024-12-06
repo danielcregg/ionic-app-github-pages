@@ -35,6 +35,7 @@ jobs:
             APP_PATH="."
           fi
           echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
+
       - name: Set up Node
         uses: actions/setup-node@v3
         with:
@@ -44,6 +45,7 @@ jobs:
         run: |
           cd $APP_PATH
           npm ci
+
       - name: Install Ionic CLI
         run: npm install -g @ionic/cli
 
@@ -58,6 +60,7 @@ jobs:
           else
             echo "PWA_ALREADY_CONFIGURED=false" >> $GITHUB_ENV
           fi
+
       - name: Check if app is standalone
         run: |
           cd $APP_PATH
@@ -66,6 +69,7 @@ jobs:
           else
             echo "IS_STANDALONE=false" >> $GITHUB_ENV
           fi
+
       - name: Add PWA support if not configured
         if: ${{ env.PWA_ALREADY_CONFIGURED == 'false' }}
         run: |
@@ -208,6 +212,7 @@ jobs:
             ]
           }
           EOF
+
       - name: Adjust standalone configuration if needed
         if: ${{ env.IS_STANDALONE == 'true' }}
         run: |
@@ -221,6 +226,7 @@ jobs:
             fi
             sed -i "/providers: \[/ s/\[/[provideServiceWorker('ngsw-worker.js', { enabled: environment.production }), /" src/main.ts
           fi
+
       - name: Ensure manifest.webmanifest in project
         run: |
           cd $APP_PATH
@@ -298,6 +304,7 @@ jobs:
               ]
             }' > src/manifest.webmanifest
           fi
+
           if ! grep -q "src/manifest.webmanifest" angular.json; then
             if ! command -v jq > /dev/null; then
               sudo apt-get update && sudo apt-get install -y jq
@@ -305,19 +312,25 @@ jobs:
             jq '.projects.app.architect.build.options.assets += ["src/manifest.webmanifest"]' angular.json > angular_modified.json
             mv angular_modified.json angular.json
           fi
+
       - name: Build the Ionic PWA
         run: |
           cd $APP_PATH
-          ionic build --prod -- --base-href /${{ env.REPO_NAME }}/
-          # Build with base-href
+          # Ensure index.html has correct base href and manifest path
+          sed -i "s|<base href=\"/\">|<base href=\"/${{ env.REPO_NAME }}/\">|" src/index.html
+          sed -i 's|<link rel="manifest" href="manifest.webmanifest">|<link rel="manifest" href="manifest.webmanifest" crossorigin="use-credentials">|' src/index.html
+          
+          # Build with specific configurations
           ionic build --prod -- --base-href /${{ env.REPO_NAME }}/ --service-worker true
-          # Copy index.html to 404.html for GitHub Pages SPA support
+          
+          # Copy files for GitHub Pages
           cp www/index.html www/404.html
-          # Update the ngsw.json with the correct paths
+          
+          # Update paths in generated files
           if [ -f "www/ngsw.json" ]; then
-            sed -i "s|/manifest.webmanifest|/${{ env.REPO_NAME }}/manifest.webmanifest|g" www/ngsw.json
-            sed -i "s|/ngsw-worker.js|/${{ env.REPO_NAME }}/ngsw-worker.js|g" www/ngsw.json
+            jq --arg base "/${{ env.REPO_NAME }}" '.[$base] = .[""]' www/ngsw.json > www/ngsw.tmp.json && mv www/ngsw.tmp.json www/ngsw.json
           fi
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
         with:
@@ -330,3 +343,4 @@ jobs:
 
       - name: Deploy to GitHub Pages
         id: deployment
+        uses: actions/deploy-pages@v4

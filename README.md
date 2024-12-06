@@ -107,6 +107,9 @@ This repository’s workflow demonstrates how to build and deploy an Ionic Angul
 - **Blank Page or 404 Errors**:  
   Ensure the `--base-href` matches the repo name. The workflow does this automatically, but verify that the final URL corresponds to your repo’s name.
 
+- **PWA Manifest or Service Worker Issues**:  
+  Ensure the `manifest.webmanifest` is correctly referenced in `index.html` and that the service worker is properly registered. Check the console for any errors related to the manifest or service worker.
+
 - **Build or Permissions Issues**:  
   Check your `ionic build` process locally. Also, ensure you did the one-time manual setup in **Settings > Pages**.
 

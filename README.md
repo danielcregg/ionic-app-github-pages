@@ -1,5 +1,8 @@
 # Ionic App GitHub Pages Deployment Example
 
+Check out this Ionic App deployed to GitHub pages. [My Ionic App](https://danielcregg.github.io/ionic-app-github-pages/)
+Please note it is also deployed as an installedable PWA.
+
 ## Quick Usage Steps
 
 1. **Add Ionic Project**: Push your Ionic project (with `ionic.config.json`) to a GitHub repository.

@@ -53,7 +53,6 @@ jobs:
       - name: Install Angular CLI
         run: npm install -g @angular/cli
 
-      # Check if PWA is already configured
       - name: Check if PWA is already configured
         run: |
           cd $APP_PATH
@@ -63,7 +62,6 @@ jobs:
             echo "PWA_ALREADY_CONFIGURED=false" >> $GITHUB_ENV
           fi
 
-      # Check if app is standalone
       - name: Check if app is standalone
         run: |
           cd $APP_PATH
@@ -73,24 +71,19 @@ jobs:
             echo "IS_STANDALONE=false" >> $GITHUB_ENV
           fi
 
-      # If not PWA configured, run ng add @angular/pwa
       - name: Add PWA support if not configured
         if: ${{ env.PWA_ALREADY_CONFIGURED == 'false' }}
         run: |
           cd $APP_PATH
           npx ng add @angular/pwa@latest --project app --force --skip-confirmation || true
 
-      # If standalone, ensure serviceWorker: true and provideServiceWorker
       - name: Adjust standalone configuration if needed
         if: ${{ env.IS_STANDALONE == 'true' }}
         run: |
           cd $APP_PATH
-          # Ensure serviceWorker: true in angular.json
           if ! grep -q '"serviceWorker": true' angular.json; then
             sed -i 's|"outputHashing": "all"|&,\n          "serviceWorker": true|' angular.json
           fi
-
-          # Ensure provideServiceWorker in main.ts
           if ! grep -q 'provideServiceWorker(' src/main.ts; then
             if ! grep -q '@angular/service-worker' src/main.ts; then
               sed -i '1i import { provideServiceWorker } from "@angular/service-worker";' src/main.ts
@@ -98,23 +91,22 @@ jobs:
             sed -i "/providers: \[/ s/\[/[provideServiceWorker('ngsw-worker.js', { enabled: environment.production }), /" src/main.ts
           fi
 
-      # Ensure manifest.webmanifest exists and is included as an asset
       - name: Ensure manifest.webmanifest in project
         run: |
           cd $APP_PATH
           if [ ! -f "src/manifest.webmanifest" ]; then
             echo "src/manifest.webmanifest not found. Creating a default manifest."
-            cat > src/manifest.webmanifest <<EOF
-{
-  "name": "My Ionic PWA",
-  "short_name": "IonicPWA",
-  "start_url": "/${REPO_NAME}/",
-  "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#1976d2",
-  "icons": []
-}
-EOF
+            cat > src/manifest.webmanifest << 'EOF'
+            {
+              "name": "My Ionic PWA",
+              "short_name": "IonicPWA",
+              "start_url": "/${REPO_NAME}/",
+              "display": "standalone",
+              "background_color": "#ffffff",
+              "theme_color": "#1976d2",
+              "icons": []
+            }
+            EOF
           fi
 
           if ! grep -q 'src/manifest.webmanifest' angular.json; then

@@ -317,14 +317,53 @@ jobs:
         run: |
           cd $APP_PATH
           
-          # Install PWA dependencies
-          npm install @angular/service-worker
-          npm install @angular/pwa
+          # Install PWA dependencies with correct version
+          npm install @angular/service-worker@^18.0.0
           
-          # Configure PWA
-          npx ng add @angular/pwa@latest --project app --skip-confirmation
+          # Update angular.json for PWA
+          jq '.projects.app.architect.build.configurations.production += {"serviceWorker": true, "ngswConfigPath": "ngsw-config.json"}' angular.json > angular.tmp.json && mv angular.tmp.json angular.json
           
-          # Update manifest with correct paths
+          # Create ngsw-config.json
+          cat > ngsw-config.json << EOF
+          {
+            "\$schema": "./node_modules/@angular/service-worker/config/schema.json",
+            "index": "/index.html",
+            "assetGroups": [
+              {
+                "name": "app",
+                "installMode": "prefetch",
+                "resources": {
+                  "files": [
+                    "/favicon.ico",
+                    "/index.html",
+                    "/manifest.webmanifest",
+                    "/*.css",
+                    "/*.js"
+                  ]
+                }
+              },
+              {
+                "name": "assets",
+                "installMode": "lazy",
+                "updateMode": "prefetch",
+                "resources": {
+                  "files": [
+                    "/assets/**",
+                    "/*.(svg|cur|jpg|jpeg|png|apng|webp|avif|gif|otf|ttf|woff|woff2)"
+                  ]
+                }
+              }
+            ],
+            "navigationUrls": [
+              "/**",
+              "!/**/*.*",
+              "!/**/*__*",
+              "!/**/*__*/**"
+            ]
+          }
+          EOF
+          
+          # Update manifest
           cat > src/manifest.webmanifest << EOF
           {
             "name": "My Ionic PWA",
@@ -379,64 +418,19 @@ jobs:
           }
           EOF
           
-          # Update ngsw-config.json
-          cat > ngsw-config.json << EOF
-          {
-            "\$schema": "./node_modules/@angular/service-worker/config/schema.json",
-            "index": "/index.html",
-            "assetGroups": [
-              {
-                "name": "app",
-                "installMode": "prefetch",
-                "resources": {
-                  "files": [
-                    "/favicon.ico",
-                    "/index.html",
-                    "/manifest.webmanifest",
-                    "/*.css",
-                    "/*.js"
-                  ]
-                }
-              },
-              {
-                "name": "assets",
-                "installMode": "lazy",
-                "updateMode": "prefetch",
-                "resources": {
-                  "files": [
-                    "/assets/**",
-                    "/*.(svg|cur|jpg|jpeg|png|apng|webp|avif|gif|otf|ttf|woff|woff2)"
-                  ]
-                }
-              }
-            ],
-            "dataGroups": [],
-            "navigationUrls": [
-              "/**",
-              "!/**/*.*",
-              "!/**/*__*",
-              "!/**/*__*/**"
-            ]
-          }
-          EOF
-          
-          # Update angular.json for PWA
-          jq '.projects.app.architect.build.configurations.production += {"serviceWorker": true, "ngswConfigPath": "ngsw-config.json"}' angular.json > angular.tmp.json && mv angular.tmp.json angular.json
-          
           # Update index.html
-          sed -i 's|<base href="/"|<base href="/${{ env.REPO_NAME }}/"|' src/index.html
-          sed -i '/<\/head>/i\  <link rel="manifest" href="manifest.webmanifest" crossorigin="use-credentials">' src/index.html
-          sed -i '/<\/head>/i\  <meta name="theme-color" content="#1976d2">' src/index.html
+          sed -i "s|<base href=\"/\">|<base href=\"/${{ env.REPO_NAME }}/\">|" src/index.html
+          if ! grep -q "manifest.webmanifest" src/index.html; then
+            sed -i '/<\/head>/i\  <link rel="manifest" href="manifest.webmanifest" crossorigin="use-credentials">' src/index.html
+            sed -i '/<\/head>/i\  <meta name="theme-color" content="#1976d2">' src/index.html
+          fi
           
           # Build the app
           ionic build --prod -- --base-href /${{ env.REPO_NAME }}/ --service-worker true
           
-          # Fix service worker paths in built files
+          # Fix service worker paths
           cd www
-          
-          # Update ngsw.json paths
           if [ -f "ngsw.json" ]; then
-            # Add base to all URLs
             jq --arg base "/${{ env.REPO_NAME }}" '
               walk(
                 if type == "object" and has("installMode") then
@@ -449,7 +443,6 @@ jobs:
             ' ngsw.json > ngsw.tmp.json && mv ngsw.tmp.json ngsw.json
           fi
           
-          # Create 404.html
           cp index.html 404.html
 
       - name: Setup Pages

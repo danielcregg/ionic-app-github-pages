@@ -24,11 +24,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Extract just the repo name from owner/repo
       - name: Extract repository name
         run: echo "REPO_NAME=${GITHUB_REPOSITORY##*/}" >> $GITHUB_ENV
 
-      # Find the Ionic app directory by searching for ionic.config.json
       - name: Find Ionic project directory
         id: find-ionic
         run: |
@@ -54,6 +52,7 @@ jobs:
       - name: Install Angular CLI
         run: npm install -g @angular/cli
 
+      # Check if PWA is already configured by looking for "serviceWorker": true
       - name: Check if PWA is already configured
         run: |
           cd $APP_PATH
@@ -63,16 +62,56 @@ jobs:
             echo "PWA_ALREADY_CONFIGURED=false" >> $GITHUB_ENV
           fi
 
-      - name: Add PWA support if not configured
+      # Check if the app is using standalone components by searching for 'bootstrapApplication'
+      - name: Check if app is standalone
+        run: |
+          cd $APP_PATH
+          if grep -q 'bootstrapApplication' src/main.ts; then
+            echo "IS_STANDALONE=true" >> $GITHUB_ENV
+          else
+            echo "IS_STANDALONE=false" >> $GITHUB_ENV
+          fi
+
+      # If not PWA configured, run ng add @angular/pwa
+      - name: Add PWA support if not configured and needed
         if: env.PWA_ALREADY_CONFIGURED == 'false'
         run: |
           cd $APP_PATH
-          npx ng add @angular/pwa@latest --project app --force --skip-confirmation
+          # Run ng add for PWA non-interactively
+          npx ng add @angular/pwa@latest --project app --force --skip-confirmation || true
+          # We use '|| true' to prevent the step from failing if ng add tries to modify files already partially configured.
+
+      # If standalone, ensure provideServiceWorker is present and serviceWorker is enabled in angular.json
+      - name: Adjust standalone configuration if needed
+        if: env.IS_STANDALONE == 'true'
+        run: |
+          cd $APP_PATH
+          # Ensure serviceWorker: true in angular.json under production configuration
+          if ! grep -q '"serviceWorker": true' angular.json; then
+            # Insert serviceWorker: true before the ending of the production configuration block
+            sed -i 's|"outputHashing": "all"|&,\n          "serviceWorker": true|' angular.json
+          fi
+
+          # Check if provideServiceWorker is included in main.ts
+          # If not, add it. This assumes a certain structure in main.ts where bootstrapApplication is called.
+          if ! grep -q 'provideServiceWorker(' src/main.ts; then
+            # Add the import if not present
+            if ! grep -q 'from .*@angular/service-worker' src/main.ts; then
+              sed -i '1i import { provideServiceWorker } from "@angular/service-worker";' src/main.ts
+            fi
+
+            # Add provideServiceWorker to the providers array in bootstrapApplication
+            # This example assumes your bootstrapApplication call looks something like:
+            # bootstrapApplication(AppComponent, { providers: [ ... ]})
+            # We'll insert provideServiceWorker('ngsw-worker.js', { enabled: environment.production }) into providers.
+            sed -i '/bootstrapApplication(.*{ providers: \[/ s/\[/\[provideServiceWorker('\''ngsw-worker.js'\'', { enabled: environment.production }), /' src/main.ts
+          fi
 
       - name: Build the Ionic PWA
         run: |
           cd $APP_PATH
-          ionic build -- --base-href /${{ env.REPO_NAME }}/
+          # Use a production configuration so service worker files are generated
+          ionic build -- --configuration production --base-href /${{ env.REPO_NAME }}/
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

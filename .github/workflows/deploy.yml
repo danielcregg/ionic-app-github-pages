@@ -76,22 +76,50 @@ jobs:
           cd $APP_PATH
           npx ng add @angular/pwa@latest --project app --force --skip-confirmation || true
           
-          # Create screenshots directory if it doesn't exist
+          # Create assets directories if they don't exist
+          mkdir -p src/assets/icons
           mkdir -p src/assets/screenshots
           
-          # Create placeholder screenshots using HTML5 Canvas
-          cat > create-screenshots.js << 'EOF'
+          # Install canvas package
+          npm install canvas
+          
+          # Create icons and screenshots
+          cat > create-assets.js << 'EOF'
           const { createCanvas } = require('canvas');
           const fs = require('fs');
+          
+          // Function to create an icon
+          function createIcon(size) {
+            const canvas = createCanvas(size, size);
+            const ctx = canvas.getContext('2d');
+            
+            // Fill background
+            ctx.fillStyle = '#1976d2';
+            ctx.fillRect(0, 0, size, size);
+            
+            // Add some simple icon design
+            ctx.beginPath();
+            ctx.arc(size/2, size/2, size/3, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffffff';
+            ctx.fill();
+            
+            // Save the icon
+            fs.writeFileSync(`src/assets/icons/icon-${size}x${size}.png`, canvas.toBuffer());
+          }
+          
+          // Create all required icons
+          [72, 96, 128, 144, 152, 192, 384, 512].forEach(size => createIcon(size));
           
           // Create desktop screenshot (1920x1080)
           const desktopCanvas = createCanvas(1920, 1080);
           const dctx = desktopCanvas.getContext('2d');
           dctx.fillStyle = '#ffffff';
           dctx.fillRect(0, 0, 1920, 1080);
-          dctx.fillStyle = '#000000';
-          dctx.font = '48px Arial';
-          dctx.fillText('Desktop Screenshot', 800, 540);
+          dctx.fillStyle = '#1976d2';
+          dctx.fillRect(0, 0, 1920, 80); // Header
+          dctx.fillStyle = '#ffffff';
+          dctx.font = 'bold 48px Arial';
+          dctx.fillText('My Ionic PWA', 50, 55);
           fs.writeFileSync('src/assets/screenshots/desktop.png', desktopCanvas.toBuffer());
           
           // Create mobile screenshot (750x1334)
@@ -99,17 +127,18 @@ jobs:
           const mctx = mobileCanvas.getContext('2d');
           mctx.fillStyle = '#ffffff';
           mctx.fillRect(0, 0, 750, 1334);
-          mctx.fillStyle = '#000000';
-          mctx.font = '32px Arial';
-          mctx.fillText('Mobile Screenshot', 250, 667);
+          mctx.fillStyle = '#1976d2';
+          mctx.fillRect(0, 0, 750, 60); // Header
+          mctx.fillStyle = '#ffffff';
+          mctx.font = 'bold 32px Arial';
+          mctx.fillText('My Ionic PWA', 20, 40);
           fs.writeFileSync('src/assets/screenshots/mobile.png', mobileCanvas.toBuffer());
           EOF
           
-          # Install canvas package to create screenshots
-          npm install canvas
-          node create-screenshots.js
+          # Generate all assets
+          node create-assets.js
           
-          # Update manifest to include screenshots and correct icon purposes
+          # Update manifest to include screenshots and icons
           cat > src/manifest.webmanifest << 'EOF'
           {
             "name": "My Ionic PWA",

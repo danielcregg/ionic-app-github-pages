@@ -80,20 +80,14 @@ jobs:
         run: |
           cd $APP_PATH
 
-          # Get the actual installed Angular core version
+          # Get Angular core version and install dependencies
           ANGULAR_CORE_VERSION=$(node -p "require('./node_modules/@angular/core/package.json').version")
           echo "Detected installed @angular/core version is $ANGULAR_CORE_VERSION"
-          
-          # Install PWA dependencies with matching version
           npm install @angular/service-worker@$ANGULAR_CORE_VERSION
-          
-          # Create assets directories
-          mkdir -p src/assets/icons
-          mkdir -p src/assets/screenshots
-          
-          # Install canvas package
           npm install canvas
-          
+
+          # Create assets directories and generate assets
+          mkdir -p src/assets/icons src/assets/screenshots
           # Generate assets with create-assets.js
           # Create icons and screenshots (your existing create-assets.js code)
           cat > create-assets.js << 'EOF'
@@ -149,8 +143,8 @@ jobs:
           
           # Generate all assets
           node create-assets.js
-          
-          # Create ngsw-config.json in the root directory
+
+          # Create PWA configuration in root directory
           cat > ngsw-config.json << EOF
           {
             "\$schema": "./node_modules/@angular/service-worker/config/schema.json",
@@ -165,7 +159,8 @@ jobs:
                     "/index.html",
                     "/manifest.webmanifest",
                     "/*.css",
-                    "/*.js"
+                    "/*.js",
+                    "!/ngsw-worker.js"
                   ]
                 }
               },
@@ -182,22 +177,27 @@ jobs:
             ],
             "navigationUrls": [
               "/**",
+              "!/tabs/*",
               "!/**/*.*",
               "!/**/*__*",
               "!/**/*__*/**"
             ]
           }
           EOF
-          
-          # Update angular.json to include PWA configuration and assets
+
+          # Update angular.json with PWA configuration
           jq '.projects.app.architect.build.options.assets += [
             "src/manifest.webmanifest",
-            "src/ngsw-worker.js"
+            {
+              "glob": "**/*",
+              "input": "src/assets",
+              "output": "/assets"
+            }
           ] | .projects.app.architect.build.configurations.production += {
             "serviceWorker": true,
             "ngswConfigPath": "ngsw-config.json"
           }' angular.json > angular.tmp.json && mv angular.tmp.json angular.json
-          
+
           # Create manifest.webmanifest in src folder
           cat > src/manifest.webmanifest << EOF
           {
@@ -260,7 +260,7 @@ jobs:
             ]
           }
           EOF
-          
+
           # Update index.html
           sed -i "s|<base href=\"/\">|<base href=\"/$REPO_NAME/\">|" src/index.html
           sed -i '/<\/head>/i\  <link rel="manifest" href="manifest.webmanifest" crossorigin="use-credentials">\n  <meta name="theme-color" content="#1976d2">' src/index.html
@@ -283,7 +283,8 @@ jobs:
           echo "export const environment = { production: true };" > src/environments/environment.prod.ts
           
           # Build the app with PWA support
-          ng build --configuration=production \
+          ng build \
+            --configuration=production \
             --base-href="/$REPO_NAME/" \
             --deploy-url="/$REPO_NAME/" \
             --service-worker=true

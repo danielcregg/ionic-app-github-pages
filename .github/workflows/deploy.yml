@@ -150,8 +150,8 @@ jobs:
           # Generate all assets
           node create-assets.js
           
-          # Create ngsw-config.json in the project root
-          cat > src/ngsw-config.json << EOF
+          # Create ngsw-config.json in the root directory
+          cat > ngsw-config.json << EOF
           {
             "\$schema": "./node_modules/@angular/service-worker/config/schema.json",
             "index": "/index.html",
@@ -189,10 +189,13 @@ jobs:
           }
           EOF
           
-          # Update angular.json to include PWA configuration
-          jq '.projects.app.architect.build.configurations.production += {
+          # Update angular.json to include PWA configuration and assets
+          jq '.projects.app.architect.build.options.assets += [
+            "src/manifest.webmanifest",
+            "src/ngsw-worker.js"
+          ] | .projects.app.architect.build.configurations.production += {
             "serviceWorker": true,
-            "ngswConfigPath": "src/ngsw-config.json"
+            "ngswConfigPath": "ngsw-config.json"
           }' angular.json > angular.tmp.json && mv angular.tmp.json angular.json
           
           # Create manifest.webmanifest in src folder
@@ -280,7 +283,10 @@ jobs:
           echo "export const environment = { production: true };" > src/environments/environment.prod.ts
           
           # Build the app with PWA support
-          ng build --configuration=production --base-href="/$REPO_NAME/" --deploy-url="/$REPO_NAME/" --service-worker=true
+          ng build --configuration=production \
+            --base-href="/$REPO_NAME/" \
+            --deploy-url="/$REPO_NAME/" \
+            --service-worker=true
           
           # Post-build fix: Create 404.html
           cd www

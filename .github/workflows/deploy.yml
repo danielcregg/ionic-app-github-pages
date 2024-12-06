@@ -188,11 +188,11 @@ jobs:
         if: ${{ env.PWA_ALREADY_CONFIGURED == 'false' }}
         run: |
           cd $APP_PATH
-          # Install @angular/service-worker matching the Angular version
+          # Install service worker package
           npm install @angular/service-worker@18.2.13 --save
-          
-          # For PWA support, use the compatible version
-          npx @angular/cli@18.2.13 add @angular/pwa --project app --force --skip-confirmation || true
+
+          # Use ng add directly for PWA without specific version
+          ng add @angular/pwa --project app --skip-confirmation || true
           
           # Create assets directories if they don't exist
           mkdir -p src/assets/icons
@@ -205,16 +205,145 @@ jobs:
           mkdir -p src/environments
           cat > src/environments/environment.ts << EOF
           export const environment = {
-            production: false,
-            baseHref: '/'
+            production: false
           };
           EOF
           
           cat > src/environments/environment.prod.ts << EOF
           export const environment = {
-            production: true,
-            baseHref: '/${REPO_NAME}/'
+            production: true
           };
+          EOF
+
+          # Create icons and screenshots
+          cat > create-assets.js << 'EOF'
+          const { createCanvas } = require('canvas');
+          const fs = require('fs');
+          
+          // Function to create an icon
+          function createIcon(size) {
+            const canvas = createCanvas(size, size);
+            const ctx = canvas.getContext('2d');
+            
+            // Fill background
+            ctx.fillStyle = '#1976d2';
+            ctx.fillRect(0, 0, size, size);
+            
+            // Add some simple icon design
+            ctx.beginPath();
+            ctx.arc(size/2, size/2, size/3, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffffff';
+            ctx.fill();
+            
+            // Save the icon
+            fs.writeFileSync(`src/assets/icons/icon-${size}x${size}.png`, canvas.toBuffer());
+          }
+          
+          // Create all required icons
+          [72, 96, 128, 144, 152, 192, 384, 512].forEach(size => createIcon(size));
+          
+          // Create desktop screenshot (1920x1080)
+          const desktopCanvas = createCanvas(1920, 1080);
+          const dctx = desktopCanvas.getContext('2d');
+          dctx.fillStyle = '#ffffff';
+          dctx.fillRect(0, 0, 1920, 1080);
+          dctx.fillStyle = '#1976d2';
+          dctx.fillRect(0, 0, 1920, 80); // Header
+          dctx.fillStyle = '#ffffff';
+          dctx.font = 'bold 48px Arial';
+          dctx.fillText('My Ionic PWA', 50, 55);
+          fs.writeFileSync('src/assets/screenshots/desktop.png', desktopCanvas.toBuffer());
+          
+          // Create mobile screenshot (750x1334)
+          const mobileCanvas = createCanvas(750, 1334);
+          const mctx = mobileCanvas.getContext('2d');
+          mctx.fillStyle = '#ffffff';
+          mctx.fillRect(0, 0, 750, 1334);
+          mctx.fillStyle = '#1976d2';
+          mctx.fillRect(0, 0, 750, 60); // Header
+          mctx.fillStyle = '#ffffff';
+          mctx.font = 'bold 32px Arial';
+          mctx.fillText('My Ionic PWA', 20, 40);
+          fs.writeFileSync('src/assets/screenshots/mobile.png', mobileCanvas.toBuffer());
+          EOF
+          
+          # Generate all assets
+          node create-assets.js
+          
+          # Update manifest to include screenshots
+          cat > src/manifest.webmanifest << EOF
+          {
+            "name": "My Ionic PWA",
+            "short_name": "IonicPWA",
+            "theme_color": "#1976d2",
+            "background_color": "#fafafa",
+            "display": "standalone",
+            "scope": "/${REPO_NAME}/",
+            "start_url": "/${REPO_NAME}/",
+            "icons": [
+              {
+                "src": "assets/icons/icon-72x72.png",
+                "sizes": "72x72",
+                "type": "image/png",
+                "purpose": "any"
+              },
+              {
+                "src": "assets/icons/icon-96x96.png",
+                "sizes": "96x96",
+                "type": "image/png",
+                "purpose": "any"
+              },
+              {
+                "src": "assets/icons/icon-128x128.png",
+                "sizes": "128x128",
+                "type": "image/png",
+                "purpose": "any"
+              },
+              {
+                "src": "assets/icons/icon-144x144.png",
+                "sizes": "144x144",
+                "type": "image/png",
+                "purpose": "any"
+              },
+              {
+                "src": "assets/icons/icon-152x152.png",
+                "sizes": "152x152",
+                "type": "image/png",
+                "purpose": "any"
+              },
+              {
+                "src": "assets/icons/icon-192x192.png",
+                "sizes": "192x192",
+                "type": "image/png",
+                "purpose": "any"
+              },
+              {
+                "src": "assets/icons/icon-384x384.png",
+                "sizes": "384x384",
+                "type": "image/png",
+                "purpose": "any"
+              },
+              {
+                "src": "assets/icons/icon-512x512.png",
+                "sizes": "512x512",
+                "type": "image/png",
+                "purpose": "any"
+              }
+            ],
+            "screenshots": [
+              {
+                "src": "assets/screenshots/desktop.png",
+                "sizes": "1920x1080",
+                "type": "image/png",
+                "form_factor": "wide"
+              },
+              {
+                "src": "assets/screenshots/mobile.png",
+                "sizes": "750x1334",
+                "type": "image/png"
+              }
+            ]
+          }
           EOF
           
           # Create icons and screenshots
@@ -301,117 +430,19 @@ jobs:
       - name: Build the Ionic PWA
         run: |
           cd $APP_PATH
-          
-          # Add correct base-href to index.html
+          # Update base href in index.html
           sed -i "s|<base href=\"/\">|<base href=\"/${REPO_NAME}/\">|" src/index.html
           
-          # Fix manifest link in index.html (use relative path)
-          sed -i 's|<link rel="manifest" href="manifest.webmanifest"|<link rel="manifest" href="./manifest.webmanifest"|' src/index.html
-          
-          # Create ngsw-config.json with proper paths
-          cat > ngsw-config.json << EOF
-          {
-            "\$schema": "./node_modules/@angular/service-worker/config/schema.json",
-            "index": "/index.html",
-            "assetGroups": [
-              {
-                "name": "app",
-                "installMode": "prefetch",
-                "resources": {
-                  "files": [
-                    "/favicon.ico",
-                    "/index.html",
-                    "/manifest.webmanifest",
-                    "/*.css",
-                    "/*.js",
-                    "/assets/**"
-                  ]
-                }
-              }
-            ],
-            "dataGroups": [],
-            "navigationUrls": [
-              "/**",
-              "!/**/*.*",
-              "!/**/*__*",
-              "!/**/*__*/**"
-            ]
-          }
-          EOF
-          
-          # Update manifest with correct paths
-          cat > src/manifest.webmanifest << EOF
-          {
-            "name": "My Ionic PWA",
-            "short_name": "IonicPWA",
-            "theme_color": "#1976d2",
-            "background_color": "#fafafa",
-            "display": "standalone",
-            "scope": "/${REPO_NAME}/",
-            "start_url": "/${REPO_NAME}/",
-            "icons": [
-              {
-                "src": "./assets/icons/icon-72x72.png",
-                "sizes": "72x72",
-                "type": "image/png",
-                "purpose": "any"
-              },
-              {
-                "src": "./assets/icons/icon-96x96.png",
-                "sizes": "96x96",
-                "type": "image/png",
-                "purpose": "any"
-              },
-              {
-                "src": "./assets/icons/icon-128x128.png",
-                "sizes": "128x128",
-                "type": "image/png",
-                "purpose": "any"
-              },
-              {
-                "src": "./assets/icons/icon-144x144.png",
-                "sizes": "144x144",
-                "type": "image/png",
-                "purpose": "any"
-              },
-              {
-                "src": "./assets/icons/icon-152x152.png",
-                "sizes": "152x152",
-                "type": "image/png",
-                "purpose": "any"
-              },
-              {
-                "src": "./assets/icons/icon-192x192.png",
-                "sizes": "192x192",
-                "type": "image/png",
-                "purpose": "any"
-              },
-              {
-                "src": "./assets/icons/icon-384x384.png",
-                "sizes": "384x384",
-                "type": "image/png",
-                "purpose": "any"
-              },
-              {
-                "src": "./assets/icons/icon-512x512.png",
-                "sizes": "512x512",
-                "type": "image/png",
-                "purpose": "any"
-              }
-            ]
-          }
-          EOF
-          
-          # Make sure manifest is included in Angular's assets
-          if [ -f "angular.json" ]; then
-            sed -i 's|"assets": \[|"assets": ["src/manifest.webmanifest",|' angular.json
-          fi
-          
-          # Build with service worker
+          # Build with service worker enabled
           ionic build --prod -- --base-href /${REPO_NAME}/ --service-worker true
           
-          # Copy files for GitHub Pages
+          # Copy index.html to 404.html for GitHub Pages
           cp www/index.html www/404.html
+          
+          # Ensure manifest and ngsw.json have correct paths
+          if [ -f "www/ngsw.json" ]; then
+            sed -i "s|\"index\":\"/index.html\"|\"index\":\"/${REPO_NAME}/index.html\"|g" www/ngsw.json
+          fi
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

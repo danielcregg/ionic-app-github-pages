@@ -321,12 +321,13 @@ jobs:
           npm install @angular/service-worker@^18.0.0
           
           # Configure environment.prod.ts
+          mkdir -p src/environments
           echo "export const environment = { production: true };" > src/environments/environment.prod.ts
           
           # Update angular.json for PWA
-          jq '.projects.app.architect.build.configurations.production += {"serviceWorker": true, "ngswConfigPath": "ngsw-config.json"}' angular.json > angular.tmp.json && mv angular.tmp.json angular.json
+          jq '.projects.app.architect.build.configurations.production |= . + {"serviceWorker": true, "ngswConfigPath": "ngsw-config.json"}' angular.json > angular.tmp.json && mv angular.tmp.json angular.json
           
-          # Create ngsw-config.json
+          # Create ngsw-config.json with correct paths
           cat > ngsw-config.json << EOF
           {
             "\$schema": "./node_modules/@angular/service-worker/config/schema.json",
@@ -337,11 +338,12 @@ jobs:
                 "installMode": "prefetch",
                 "resources": {
                   "files": [
-                    "/favicon.ico",
-                    "/index.html",
                     "/manifest.webmanifest",
+                    "/index.html",
                     "/*.css",
-                    "/*.js"
+                    "/*.js",
+                    "!/ngsw-worker.js",
+                    "/assets/icons/*.png"
                   ]
                 }
               },
@@ -355,11 +357,16 @@ jobs:
                   ]
                 }
               }
+            ],
+            "dataGroups": [],
+            "hashTable": {},
+            "navigationUrls": [
+              "/**"
             ]
           }
           EOF
           
-          # Update manifest
+          # Update manifest with absolute paths
           cat > src/manifest.webmanifest << EOF
           {
             "name": "My Ionic PWA",
@@ -368,7 +375,7 @@ jobs:
             "background_color": "#ffffff",
             "display": "standalone",
             "scope": "/${{ env.REPO_NAME }}/",
-            "start_url": "/${{ env.REPO_NAME }}/",
+            "start_url": "/${{ env.REPO_NAME }}/index.html",
             "icons": [
               {
                 "src": "assets/icons/icon-72x72.png",
@@ -422,20 +429,43 @@ jobs:
           }
           EOF
           
-          # Update index.html
+          # Crucial: Update index.html with proper paths and PWA meta tags
           sed -i "s|<base href=\"/\">|<base href=\"/${{ env.REPO_NAME }}/\">|" src/index.html
-          sed -i '/<\/head>/i\  <link rel="manifest" href="manifest.webmanifest" crossorigin="use-credentials">' src/index.html
-          sed -i '/<\/head>/i\  <meta name="theme-color" content="#1976d2">' src/index.html
-          sed -i '/<\/body>/i\  <script>\n    if ("serviceWorker" in navigator) {\n      navigator.serviceWorker.register("ngsw-worker.js")\n        .then(reg => console.log("Service worker registered:", reg))\n        .catch(err => console.error("Service worker error:", err));\n    }\n  </script>' src/index.html
           
-          # Build the app
+          # Remove existing manifest link if any
+          sed -i '/<link.*manifest.*>/d' src/index.html
+          
+          # Add PWA tags right before </head>
+          sed -i '/<\/head>/i\  <link rel="manifest" href="manifest.webmanifest" crossorigin="use-credentials">\n  <meta name="theme-color" content="#1976d2">\n  <meta name="apple-mobile-web-app-capable" content="yes">\n  <meta name="apple-mobile-web-app-status-bar-style" content="default">\n  <link rel="apple-touch-icon" href="assets/icons/icon-192x192.png">' src/index.html
+          
+          # Add service worker registration script with proper error handling
+          cat >> src/index.html << 'EOF'
+          <script>
+            if ('serviceWorker' in navigator) {
+              window.addEventListener('load', function() {
+                navigator.serviceWorker.register('ngsw-worker.js')
+                  .then(function(registration) {
+                    console.log('Service Worker registered with scope:', registration.scope);
+                  })
+                  .catch(function(err) {
+                    console.error('Service Worker registration failed:', err);
+                  });
+              });
+            }
+          </script>
+          </body>
+          </html>
+          EOF
+          
+          # Build with correct configurations
           ionic build --prod -- --base-href="/${{ env.REPO_NAME }}/"
           
           # Post-build fixes
           cd www
           
-          # Fix service worker paths
+          # Fix service worker configuration
           if [ -f "ngsw.json" ]; then
+            # Add base href to all URLs
             jq --arg base "/${{ env.REPO_NAME }}" '
               walk(
                 if type == "object" and has("installMode") then
@@ -445,7 +475,14 @@ jobs:
                 else .
                 end
               )' ngsw.json > ngsw.tmp.json && mv ngsw.tmp.json ngsw.json
+            
+            # Ensure baseHref is set correctly
+            sed -i "s|\"baseHref\":\"\"|\"baseHref\":\"/${{ env.REPO_NAME }}/\"|g" ngsw.json
           fi
+          
+          # Ensure proper paths in manifest
+          sed -i "s|\"start_url\": \"/|\"start_url\": \"/${{ env.REPO_NAME }}/|g" manifest.webmanifest
+          sed -i "s|\"scope\": \"/|\"scope\": \"/${{ env.REPO_NAME }}/|g" manifest.webmanifest
           
           # Create 404.html
           cp index.html 404.html

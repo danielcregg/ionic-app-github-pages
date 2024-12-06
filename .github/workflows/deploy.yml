@@ -95,8 +95,6 @@ jobs:
             if ! grep -q '@angular/service-worker' src/main.ts; then
               sed -i '1i import { provideServiceWorker } from "@angular/service-worker";' src/main.ts
             fi
-            # Insert provideServiceWorker into providers array
-            # Use a simpler pattern to avoid YAML parsing issues. We look for 'providers: [' and insert the code
             sed -i "/providers: \[/ s/\[/[provideServiceWorker('ngsw-worker.js', { enabled: environment.production }), /" src/main.ts
           fi
 

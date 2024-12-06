@@ -1,4 +1,4 @@
-name: Deploy Ionic App to GitHub Pages
+name: Deploy Ionic PWA to GitHub Pages
 
 on:
   push:
@@ -34,7 +34,6 @@ jobs:
         run: |
           APP_PATH=$(find . -type f -name ionic.config.json -exec dirname {} \; | head -n 1)
           if [ -z "$APP_PATH" ]; then
-            # If not found, assume the root directory is the app directory
             APP_PATH="."
           fi
           echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
@@ -47,15 +46,32 @@ jobs:
       - name: Install Dependencies
         run: |
           cd $APP_PATH
-          npm install
+          npm ci
 
       - name: Install Ionic CLI
         run: npm install -g @ionic/cli
 
-      - name: Build the Ionic App
+      - name: Install Angular CLI
+        run: npm install -g @angular/cli
+
+      # Check if PWA is already configured by looking for "serviceWorker": true in angular.json
+      - name: Check if PWA is already configured
         run: |
           cd $APP_PATH
-          # Use the dynamically extracted repository name for the baseHref
+          if grep -q '"serviceWorker": true' angular.json; then
+            echo "PWA_ALREADY_CONFIGURED=true" >> $GITHUB_ENV
+          else
+            echo "PWA_ALREADY_CONFIGURED=false" >> $GITHUB_ENV
+
+      - name: Add PWA support if not configured
+        if: env.PWA_ALREADY_CONFIGURED == 'false'
+        run: |
+          cd $APP_PATH
+          npx ng add @angular/pwa --project app --force
+
+      - name: Build the Ionic PWA
+        run: |
+          cd $APP_PATH
           ionic build -- --base-href /${{ env.REPO_NAME }}/
 
       - name: Setup Pages

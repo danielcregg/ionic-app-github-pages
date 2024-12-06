@@ -68,6 +68,12 @@ jobs:
             echo "IS_STANDALONE=true" >> $GITHUB_ENV
           else
             echo "IS_STANDALONE=false" >> $GITHUB_ENV
+          fi
+        shell: /usr/bin/bash -e {0}
+        env:
+          REPO_NAME: ${{ env.REPO_NAME }}
+          APP_PATH: ${{ env.APP_PATH }}
+          PWA_ALREADY_CONFIGURED: ${{ env.PWA_ALREADY_CONFIGURED }}
 
       - name: Add PWA support if not configured
         if: ${{ env.PWA_ALREADY_CONFIGURED == 'false' }}

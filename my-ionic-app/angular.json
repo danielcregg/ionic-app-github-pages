@@ -29,8 +29,7 @@
                 "glob": "**/*",
                 "input": "src/assets",
                 "output": "assets"
-              },
-              "src/manifest.webmanifest"
+              }
             ],
             "styles": ["src/global.scss", "src/theme/variables.scss"],
             "scripts": []

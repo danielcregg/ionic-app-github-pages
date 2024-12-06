@@ -69,7 +69,6 @@ jobs:
           else
             echo "IS_STANDALONE=false" >> $GITHUB_ENV
           fi
-          fi
 
       - name: Add PWA support if not configured
         if: ${{ env.PWA_ALREADY_CONFIGURED == 'false' }}

@@ -68,15 +68,11 @@ jobs:
             echo "IS_STANDALONE=true" >> $GITHUB_ENV
           else
             echo "IS_STANDALONE=false" >> $GITHUB_ENV
-          fi
 
       - name: Add PWA support if not configured
         if: ${{ env.PWA_ALREADY_CONFIGURED == 'false' }}
         run: |
           cd $APP_PATH
-
-          # Ensure dependencies are installed
-          npm ci
 
           # Get the actual installed Angular core version
           ANGULAR_CORE_VERSION=$(node -p "require('./node_modules/@angular/core/package.json').version")
@@ -85,13 +81,14 @@ jobs:
           # Install PWA dependencies with matching version
           npm install @angular/service-worker@$ANGULAR_CORE_VERSION
           
-          # Create assets directories if they don't exist
+          # Create assets directories
           mkdir -p src/assets/icons
           mkdir -p src/assets/screenshots
           
           # Install canvas package
           npm install canvas
           
+          # Generate assets with create-assets.js
           # Create icons and screenshots (your existing create-assets.js code)
           cat > create-assets.js << 'EOF'
           const { createCanvas } = require('canvas');
@@ -147,12 +144,8 @@ jobs:
           # Generate all assets
           node create-assets.js
           
-          # Configure PWA
-          # Remove existing ngsw-config.json if it exists
-          rm -f ngsw-config.json
-          
-          # Create fresh ngsw-config.json
-          cat > ngsw-config.json << EOF
+          # Create ngsw-config.json in the project root
+          cat > src/ngsw-config.json << EOF
           {
             "\$schema": "./node_modules/@angular/service-worker/config/schema.json",
             "index": "/index.html",
@@ -180,11 +173,23 @@ jobs:
                   ]
                 }
               }
+            ],
+            "navigationUrls": [
+              "/**",
+              "!/**/*.*",
+              "!/**/*__*",
+              "!/**/*__*/**"
             ]
           }
           EOF
           
-          # Update manifest.webmanifest
+          # Update angular.json to include PWA configuration
+          jq '.projects.app.architect.build.configurations.production += {
+            "serviceWorker": true,
+            "ngswConfigPath": "src/ngsw-config.json"
+          }' angular.json > angular.tmp.json && mv angular.tmp.json angular.json
+          
+          # Create manifest.webmanifest in src folder
           cat > src/manifest.webmanifest << EOF
           {
             "name": "My Ionic PWA",
@@ -193,7 +198,7 @@ jobs:
             "background_color": "#ffffff",
             "display": "standalone",
             "scope": "/$REPO_NAME/",
-            "start_url": "/$REPO_NAME/index.html",
+            "start_url": "/$REPO_NAME/",
             "icons": [
               {
                 "src": "assets/icons/icon-72x72.png",
@@ -247,13 +252,9 @@ jobs:
           }
           EOF
           
-          # Update angular.json
-          jq '.projects.app.architect.build.configurations.production += {"serviceWorker": true, "ngswConfigPath": "ngsw-config.json"}' angular.json > angular.tmp.json && mv angular.tmp.json angular.json
-          
           # Update index.html
           sed -i "s|<base href=\"/\">|<base href=\"/$REPO_NAME/\">|" src/index.html
           sed -i '/<\/head>/i\  <link rel="manifest" href="manifest.webmanifest" crossorigin="use-credentials">\n  <meta name="theme-color" content="#1976d2">' src/index.html
-          sed -i "s|<your-repo-name>|$REPO_NAME|g" src/index.html
           
           # Add service worker registration script
           sed -i '/<\/body>/i\  <script>\n    if ("serviceWorker" in navigator) {\n      window.addEventListener("load", function() {\n        navigator.serviceWorker.register("ngsw-worker.js", { scope: "/$REPO_NAME/" })\n          .then(function(registration) { console.log("SW registered:", registration.scope); })\n          .catch(function(error) { console.error("SW registration failed:", error); });\n      });\n    }\n  </script>' src/index.html
@@ -273,7 +274,7 @@ jobs:
           echo "export const environment = { production: true };" > src/environments/environment.prod.ts
           
           # Build the app with PWA support
-          ionic build --configuration=production -- --base-href="/$REPO_NAME/" --deploy-url="/$REPO_NAME/" --service-worker=true
+          ng build --configuration=production --base-href="/$REPO_NAME/" --deploy-url="/$REPO_NAME/" --service-worker=true
           
           # Post-build fix: Create 404.html
           cd www

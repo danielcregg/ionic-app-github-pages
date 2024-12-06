@@ -60,7 +60,6 @@ jobs:
           else
             echo "PWA_ALREADY_CONFIGURED=false" >> $GITHUB_ENV
           fi
-          fi
 
       - name: Check if app is standalone
         run: |

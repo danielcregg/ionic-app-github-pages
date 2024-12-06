@@ -54,7 +54,6 @@ jobs:
       - name: Install Angular CLI
         run: npm install -g @angular/cli
 
-      # Check if PWA is already configured by looking for "serviceWorker": true in angular.json
       - name: Check if PWA is already configured
         run: |
           cd $APP_PATH
@@ -62,6 +61,7 @@ jobs:
             echo "PWA_ALREADY_CONFIGURED=true" >> $GITHUB_ENV
           else
             echo "PWA_ALREADY_CONFIGURED=false" >> $GITHUB_ENV
+          fi
 
       - name: Add PWA support if not configured
         if: env.PWA_ALREADY_CONFIGURED == 'false'

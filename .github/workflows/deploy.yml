@@ -77,28 +77,53 @@ jobs:
         if: env.PWA_ALREADY_CONFIGURED == 'false'
         run: |
           cd $APP_PATH
-          # Run ng add for PWA non-interactively
           npx ng add @angular/pwa@latest --project app --force --skip-confirmation || true
 
-      # If standalone, ensure provideServiceWorker is in main.ts and serviceWorker: true in angular.json
+      # If standalone, ensure provideServiceWorker and serviceWorker: true
       - name: Adjust standalone configuration if needed
         if: env.IS_STANDALONE == 'true'
         run: |
           cd $APP_PATH
-          # Ensure serviceWorker: true in angular.json
           if ! grep -q '"serviceWorker": true' angular.json; then
-            # Insert serviceWorker: true before the closing of production config
             sed -i 's|"outputHashing": "all"|&,\n          "serviceWorker": true|' angular.json
           fi
 
-          # Check if provideServiceWorker is included in main.ts
           if ! grep -q 'provideServiceWorker(' src/main.ts; then
-            # Add the import if not present
             if ! grep -q '@angular/service-worker' src/main.ts; then
               sed -i '1i import { provideServiceWorker } from "@angular/service-worker";' src/main.ts
             fi
-            # Insert provideServiceWorker into providers array in bootstrapApplication call
             sed -i '/bootstrapApplication(.*{ providers: \[/ s/\[/\[provideServiceWorker('\''ngsw-worker.js'\'', { enabled: environment.production }), /' src/main.ts
+          fi
+
+      # Ensure manifest.webmanifest exists and is in angular.json assets
+      - name: Ensure manifest.webmanifest in project
+        run: |
+          cd $APP_PATH
+          # Check if manifest exists
+          if [ ! -f "src/manifest.webmanifest" ]; then
+            echo "src/manifest.webmanifest not found. Creating a default manifest."
+            cat <<EOF > src/manifest.webmanifest
+{
+  "name": "My Ionic PWA",
+  "short_name": "IonicPWA",
+  "start_url": "/${REPO_NAME}/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1976d2",
+  "icons": []
+}
+EOF
+          fi
+
+          # Check if manifest.webmanifest is listed in assets
+          if ! grep -q 'src/manifest.webmanifest' angular.json; then
+            # Install jq if not present (usually not needed but just in case)
+            if ! command -v jq > /dev/null; then
+              sudo apt-get update && sudo apt-get install -y jq
+            fi
+            # Add manifest.webmanifest to angular.json assets using jq
+            jq '.projects.app.architect.build.options.assets += ["src/manifest.webmanifest"]' angular.json > angular_modified.json
+            mv angular_modified.json angular.json
           fi
 
       - name: Build the Ionic PWA

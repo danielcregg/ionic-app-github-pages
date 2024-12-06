@@ -143,7 +143,7 @@ jobs:
           {
             "name": "My Ionic PWA",
             "short_name": "IonicPWA",
-            "start_url": "/${REPO_NAME}/",
+            "start_url": "/${REPO_NAME}/index.html",
             "display": "standalone",
             "background_color": "#ffffff",
             "theme_color": "#1976d2",
@@ -317,6 +317,8 @@ jobs:
         run: |
           cd $APP_PATH
           ionic build --prod -- --base-href /${{ env.REPO_NAME }}/
+          # Copy index.html to 404.html for GitHub Pages SPA support
+          cp www/index.html www/404.html
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

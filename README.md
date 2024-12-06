@@ -1,58 +1,43 @@
 # Ionic App GitHub Pages Deployment Example
 
-Check out this Ionic App deployed to GitHub pages. [My Ionic App](https://danielcregg.github.io/ionic-app-github-pages/)
-Please note it is also deployed as an installedable PWA.
+Check out this Ionic App deployed to GitHub Pages: [My Ionic App](https://<your-username>.github.io/<your-repo-name>/)
+
+Please note it is also deployed as an installable Progressive Web App (PWA).
 
 ## Quick Usage Steps
 
 1. **Add Ionic Project**: Push your Ionic project (with `ionic.config.json`) to a GitHub repository.
-2. **Add Workflow File**: Copy the provided `.github/workflows/deploy.yml` file into your repo.
-3. **Enable Pages Once**: In **Settings > Pages**, select "GitHub Actions" as the source and save.
-4. **Push Changes**: Commit and push your code to `main`. The workflow will automatically build and deploy your app.
+
+2. **Add Workflow File**: Copy the provided `.github/workflows/deploy.yml` file into your repository.
+
+3. **Enable GitHub Pages**:
+   - Go to **Settings > Pages** in your repository.
+   - Under **Build and deployment**, select **GitHub Actions** as the source and save.
+
+4. **Push Changes**: Commit and push your code to the `main` branch. The workflow will automatically build and deploy your app as a PWA to GitHub Pages.
+
 5. **View Your Site**: Access your app at `https://<your-username>.github.io/<your-repo-name>/`.
 
 ---
 
-## Overview
+## What's New
 
-This repository’s workflow demonstrates how to build and deploy an Ionic Angular application to GitHub Pages using GitHub Actions. By using a dynamic approach, you can place your Ionic project anywhere in the repository (at the root or in a subdirectory), and the workflow will:
+The workflow has been updated to fix issues with PWA functionality. The following changes have been made:
 
-- Detect the Ionic project directory by searching for `ionic.config.json`.
-- Dynamically set the `--base-href` based on your repository name.
-- Automatically build, upload, and deploy the `www` folder to GitHub Pages.
-
-## Prerequisites
-
-1. **Public Repository**:  
-   Easiest with public repos. For private repos, ensure you have a GitHub plan that supports private Pages.
-
-2. **Ionic Project Structure**:  
-   Your Ionic project should have a `ionic.config.json` file. Running `ionic build` locally should produce a `www` folder with your production-ready files.
-
-3. **Node and Ionic CLI**:  
-   The workflow installs Node.js 18 and the Ionic CLI in the GitHub Actions runner. You don’t need to set this up yourself.
-
-## How the Workflow Works
-
-1. **Detect Project Directory**:  
-   The workflow finds `ionic.config.json` and sets that directory as the working directory. If none is found, it defaults to the repository’s root.
-
-2. **Dynamic Base Href**:  
-   The workflow extracts your repository name from `GITHUB_REPOSITORY` and uses it as the `--base-href`. For a repo named `ionic-app-github-pages`, the final site URL is `https://<username>.github.io/ionic-app-github-pages/`.
-
-3. **Build and Deploy**:  
-   After building, `actions/upload-pages-artifact` packages the `www` folder, and `actions/deploy-pages` deploys it to GitHub Pages.
-
-4. **One-Time Pages Enablement**:  
-   You must enable GitHub Pages to use GitHub Actions once manually: **Settings > Pages > Build and Deployment**, select **GitHub Actions**, and save.
+- **Service Worker Registration Fix**: Adjusted `index.html` and `ngsw-config.json` to correctly register and configure the service worker when the app is served from a subdirectory.
+- **Relative Paths in Service Worker Config**: Updated `ngsw-config.json` to use relative paths, ensuring assets are correctly cached.
+- **Build Configuration Updates**: Modified `angular.json` and the build command to include `baseHref` and `deployUrl`, allowing the app to work properly from the GitHub Pages subdirectory.
 
 ## Detailed Steps for Your Own Repo
 
-1. **Add Your Ionic Project to a Repo**:  
-   Push your Ionic project to a new or existing GitHub repository. Make sure `ionic.config.json` is present at the root or a subdirectory.
+1. **Add Your Ionic Project to a Repo**:
 
-2. **Add the Workflow File**:  
-   Create `.github/workflows/deploy.yml` in your repository if it doesn’t exist. Copy the provided workflow into this file. Example structure:
+   Push your Ionic project to a new or existing GitHub repository. Ensure `ionic.config.json` is present at the root or within a subdirectory.
+
+2. **Add the Workflow File**:
+
+   Create a `.github/workflows/deploy.yml` file in your repository if it doesn’t exist. Copy the updated workflow into this file. Example structure:
+
    ```
    .
    ├─ .github/
@@ -65,6 +50,7 @@ This repository’s workflow demonstrates how to build and deploy an Ionic Angul
    ```
 
    If your project is in `my-ionic-app/`, for instance:
+
    ```
    .
    ├─ .github/
@@ -77,47 +63,152 @@ This repository’s workflow demonstrates how to build and deploy an Ionic Angul
    │  └─ ...
    ```
 
-   No edits to the workflow are necessary; it will automatically detect the project directory.
+   **Note**: Ensure the workflow file reflects the changes made to fix the PWA issues.
 
-3. **Manually Enable GitHub Pages Once**:  
-   Go to **Settings > Pages** in your repository and set "GitHub Actions" as the source and save. You only need to do this once.
+3. **Update `angular.json`**:
 
-4. **Push to Main**:  
-   Commit and push your code to the `main` branch. The workflow will:
-   - Locate the project directory.
-   - Install dependencies and run `ionic build` with the correct `--base-href`.
-   - Upload and deploy the `www` folder.
+   Ensure that your `angular.json` includes the following in the production build configuration:
 
-5. **Visit Your Site**:  
-   Once the action completes, your site will be live at:
+   ```json
+   // ...existing configurations...
+   "configurations": {
+     "production": {
+       // ...existing code...
+       "baseHref": "/<your-repo-name>/",
+       "deployUrl": "/<your-repo-name>/",
+       "serviceWorker": true,
+       "ngswConfigPath": "ngsw-config.json"
+       // ...existing code...
+     }
+   }
+   // ...existing configurations...
    ```
-   https://<username>.github.io/<repo-name>/
+
+4. **Update `ngsw-config.json`**:
+
+   Ensure paths are relative in `ngsw-config.json`:
+
+   ```json
+   // ...existing code...
+   "index": "index.html",
+   "assetGroups": [
+     {
+       // ...existing code...
+       "resources": {
+         "files": [
+           "favicon.ico",
+           "index.html",
+           "manifest.webmanifest",
+           "/*.css",
+           "/*.js",
+           "!ngsw-worker.js"
+         ]
+         // ...existing code...
+       }
+     },
+     // ...existing asset groups...
+   ]
+   // ...existing code...
    ```
 
-## Adapting for Different Project Structures
+5. **Update `src/index.html`**:
 
-- **Project at Root**:  
-  If `ionic.config.json` is at the root, it just builds from `.`.
-  
-- **Project in a Subdirectory**:  
-  If the file is in `my-ionic-app/`, the workflow will detect that and run build commands there.
+   Modify `index.html` to correctly reference the manifest and register the service worker:
+
+   ```html
+   <!-- ...existing code... -->
+   <link rel="manifest" href="manifest.webmanifest" crossorigin="use-credentials" />
+   <!-- ...existing code... -->
+   <script>
+     if ('serviceWorker' in navigator) {
+       window.addEventListener('load', function() {
+         navigator.serviceWorker.register('ngsw-worker.js')
+           .then(function(registration) {
+             console.log('Service Worker registered:', registration.scope);
+           })
+           .catch(function(error) {
+             console.error('Service Worker registration failed:', error);
+           });
+       });
+     }
+   </script>
+   <!-- ...existing code... -->
+   ```
+
+6. **Ensure Production Environment is Correctly Set**:
+
+   In `src/environments/environment.prod.ts`, ensure that `production` is set to `true`:
+
+   ```typescript
+   // filepath: /src/environments/environment.prod.ts
+   export const environment = {
+     production: true
+   };
+   ```
+
+7. **Modify the Build Command in the Workflow**:
+
+   Ensure that the build command in your workflow includes `--deploy-url`:
+
+   ```yaml
+   # ...existing workflow steps...
+   - name: Build the Ionic PWA
+     run: |
+       cd $APP_PATH
+       # Ensure production environment
+       mkdir -p src/environments
+       echo "export const environment = { production: true };" > src/environments/environment.prod.ts
+       # Build the app with PWA support
+       ionic build --configuration=production -- --base-href="/${{ env.REPO_NAME }}/" --deploy-url="/${{ env.REPO_NAME }}/" --service-worker=true
+       # Post-build fix: Create 404.html
+       cd www
+       cp index.html 404.html
+   # ...remaining workflow steps...
+   ```
+
+8. **Push to Main**:
+
+   Commit and push all changes to the `main` branch. The workflow will:
+
+   - Install dependencies.
+   - Build the app with PWA support.
+   - Deploy the `www` folder to GitHub Pages.
+
+9. **Visit Your Site**:
+
+   Once the action completes, your PWA will be live at:
+
+   ```
+   https://<your-username>.github.io/<your-repo-name>/
+   ```
 
 ## Troubleshooting
 
-- **Blank Page or 404 Errors**:  
-  Ensure the `--base-href` matches the repo name. The workflow does this automatically, but verify that the final URL corresponds to your repo’s name.
+- **Service Worker Not Registering**:
 
-- **PWA Manifest or Service Worker Issues**:  
-  Ensure the `manifest.webmanifest` is correctly referenced in `index.html` and that the service worker is properly registered. Check the console for any errors related to the manifest or service worker.
+  Ensure that the paths in `ngsw-config.json` are relative and that the service worker registration script in `index.html` uses the correct path.
 
-- **Build or Permissions Issues**:  
-  Check your `ionic build` process locally. Also, ensure you did the one-time manual setup in **Settings > Pages**.
+- **PWA Assets Not Loading**:
+
+  Check that `baseHref` and `deployUrl` are correctly set in `angular.json` and in the build command within your workflow.
+
+- **404 Errors on Reload**:
+
+  Make sure to include a `404.html` file in your `www` directory. The workflow handles this by copying `index.html` to `404.html` after the build.
+
+- **Manifest or Service Worker Issues**:
+
+  Verify that `manifest.webmanifest` is correctly referenced in `index.html` and that the service worker is properly registered. Check the console for any errors related to the manifest or service worker.
 
 ## Conclusion
 
-With this workflow, you can:
+With these updates, your Ionic app should now function correctly as a PWA when deployed to GitHub Pages. The service worker will cache assets appropriately, and users can install your app to their devices.
 
-- Easily drop a ready-to-go CI/CD pipeline into any Ionic project.
-- Automatically adapt to different directory structures and repository names.
-- Enjoy continuous deployment to GitHub Pages once the initial setup is complete.
+---
+
+**Note**: Replace `<your-username>` and `<your-repo-name>` with your actual GitHub username and repository name.
+
+---
+
+By following these steps, you can utilize the updated workflow to deploy your Ionic PWA to GitHub Pages successfully.
 

@@ -74,12 +74,13 @@ jobs:
         if: ${{ env.PWA_ALREADY_CONFIGURED == 'false' }}
         run: |
           cd $APP_PATH
-          
-          # Get Angular core version from package.json
-          ANGULAR_CORE_VERSION=$(node -p "require('./package.json').dependencies['@angular/core'] || require('./package.json').devDependencies['@angular/core']")
-          # Remove leading ^ or ~
-          ANGULAR_CORE_VERSION=$(echo $ANGULAR_CORE_VERSION | sed 's/^[\^~]//')
-          echo "Detected @angular/core version is $ANGULAR_CORE_VERSION"
+
+          # Ensure dependencies are installed
+          npm ci
+
+          # Get the actual installed Angular core version
+          ANGULAR_CORE_VERSION=$(node -p "require('./node_modules/@angular/core/package.json').version")
+          echo "Detected installed @angular/core version is $ANGULAR_CORE_VERSION"
           
           # Install PWA dependencies with matching version
           npm install @angular/service-worker@$ANGULAR_CORE_VERSION

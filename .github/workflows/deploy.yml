@@ -321,7 +321,7 @@ jobs:
           sed -i 's|<link rel="manifest" href="manifest.webmanifest">|<link rel="manifest" href="manifest.webmanifest" crossorigin="use-credentials">|' src/index.html
           
           # Build with specific configurations
-          ionic build --prod -- --base-href /${{ env.REPO_NAME }}/ --service-worker true --configuration production
+          ionic build --prod -- --base-href /${{ env.REPO_NAME }}/ --service-worker true
           
           # Copy files for GitHub Pages
           cp www/index.html www/404.html

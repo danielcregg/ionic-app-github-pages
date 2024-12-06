@@ -324,167 +324,33 @@ jobs:
           mkdir -p src/environments
           echo "export const environment = { production: true };" > src/environments/environment.prod.ts
           
-          # Update angular.json for PWA
-          jq '.projects.app.architect.build.configurations.production |= . + {"serviceWorker": true, "ngswConfigPath": "ngsw-config.json"}' angular.json > angular.tmp.json && mv angular.tmp.json angular.json
+          # Update manifest with correct scope and start_url
+          sed -i "s|\"start_url\": \"./\"|\"start_url\": \"/${{ env.REPO_NAME }}/\"|" src/manifest.webmanifest
+          sed -i "s|\"scope\": \"./\"|\"scope\": \"/${{ env.REPO_NAME }}/\"|" src/manifest.webmanifest
           
-          # Create ngsw-config.json with correct paths
-          cat > ngsw-config.json << EOF
-          {
-            "\$schema": "./node_modules/@angular/service-worker/config/schema.json",
-            "index": "/index.html",
-            "assetGroups": [
-              {
-                "name": "app",
-                "installMode": "prefetch",
-                "resources": {
-                  "files": [
-                    "/manifest.webmanifest",
-                    "/index.html",
-                    "/*.css",
-                    "/*.js",
-                    "!/ngsw-worker.js",
-                    "/assets/icons/*.png"
-                  ]
-                }
-              },
-              {
-                "name": "assets",
-                "installMode": "lazy",
-                "updateMode": "prefetch",
-                "resources": {
-                  "files": [
-                    "/assets/**"
-                  ]
-                }
-              }
-            ],
-            "dataGroups": [],
-            "hashTable": {},
-            "navigationUrls": [
-              "/**"
-            ]
-          }
-          EOF
-          
-          # Update manifest with absolute paths
-          cat > src/manifest.webmanifest << EOF
-          {
-            "name": "My Ionic PWA",
-            "short_name": "IonicPWA",
-            "theme_color": "#1976d2",
-            "background_color": "#ffffff",
-            "display": "standalone",
-            "scope": "/${{ env.REPO_NAME }}/",
-            "start_url": "/${{ env.REPO_NAME }}/index.html",
-            "icons": [
-              {
-                "src": "assets/icons/icon-72x72.png",
-                "sizes": "72x72",
-                "type": "image/png",
-                "purpose": "maskable any"
-              },
-              {
-                "src": "assets/icons/icon-96x96.png",
-                "sizes": "96x96",
-                "type": "image/png",
-                "purpose": "maskable any"
-              },
-              {
-                "src": "assets/icons/icon-128x128.png",
-                "sizes": "128x128",
-                "type": "image/png",
-                "purpose": "maskable any"
-              },
-              {
-                "src": "assets/icons/icon-144x144.png",
-                "sizes": "144x144",
-                "type": "image/png",
-                "purpose": "maskable any"
-              },
-              {
-                "src": "assets/icons/icon-152x152.png",
-                "sizes": "152x152",
-                "type": "image/png",
-                "purpose": "maskable any"
-              },
-              {
-                "src": "assets/icons/icon-192x192.png",
-                "sizes": "192x192",
-                "type": "image/png",
-                "purpose": "maskable any"
-              },
-              {
-                "src": "assets/icons/icon-384x384.png",
-                "sizes": "384x384",
-                "type": "image/png",
-                "purpose": "maskable any"
-              },
-              {
-                "src": "assets/icons/icon-512x512.png",
-                "sizes": "512x512",
-                "type": "image/png",
-                "purpose": "maskable any"
-              }
-            ]
-          }
-          EOF
-          
-          # Crucial: Update index.html with proper paths and PWA meta tags
+          # Update index.html
           sed -i "s|<base href=\"/\">|<base href=\"/${{ env.REPO_NAME }}/\">|" src/index.html
+          sed -i 's|<link rel="manifest" href="manifest.webmanifest">|<link rel="manifest" href="manifest.webmanifest" crossorigin="use-credentials">|' src/index.html
           
-          # Remove existing manifest link if any
-          sed -i '/<link.*manifest.*>/d' src/index.html
+          # Add service worker registration script
+          sed -i '/<\/body>/i\  <script>\n    if ("serviceWorker" in navigator) {\n      navigator.serviceWorker.register("ngsw-worker.js")\n        .then(registration => console.log("Service Worker registered:", registration.scope))\n        .catch(error => console.error("Service Worker error:", error));\n    }\n  </script>' src/index.html
           
-          # Add PWA tags right before </head>
-          sed -i '/<\/head>/i\  <link rel="manifest" href="manifest.webmanifest" crossorigin="use-credentials">\n  <meta name="theme-color" content="#1976d2">\n  <meta name="apple-mobile-web-app-capable" content="yes">\n  <meta name="apple-mobile-web-app-status-bar-style" content="default">\n  <link rel="apple-touch-icon" href="assets/icons/icon-192x192.png">' src/index.html
+          # Build with specific configurations
+          ionic build --prod -- --base-href /${{ env.REPO_NAME }}/ --service-worker true
           
-          # Add service worker registration script with proper error handling
-          cat >> src/index.html << 'EOF'
-          <script>
-            if ('serviceWorker' in navigator) {
-              window.addEventListener('load', function() {
-                navigator.serviceWorker.register('ngsw-worker.js')
-                  .then(function(registration) {
-                    console.log('Service Worker registered with scope:', registration.scope);
-                  })
-                  .catch(function(err) {
-                    console.error('Service Worker registration failed:', err);
-                  });
-              });
-            }
-          </script>
-          </body>
-          </html>
-          EOF
-          
-          # Build with correct configurations
-          ionic build --prod -- --base-href="/${{ env.REPO_NAME }}/"
-          
-          # Post-build fixes
+          # Post-build fixes for service worker
           cd www
           
-          # Fix service worker configuration
+          # Update paths in ngsw.json
           if [ -f "ngsw.json" ]; then
-            # Add base href to all URLs
-            jq --arg base "/${{ env.REPO_NAME }}" '
-              walk(
-                if type == "object" and has("installMode") then
-                  .resources.files |= map(
-                    if startswith("/") then $base + . else . end
-                  )
-                else .
-                end
-              )' ngsw.json > ngsw.tmp.json && mv ngsw.tmp.json ngsw.json
-            
-            # Ensure baseHref is set correctly
+            # Update base href
             sed -i "s|\"baseHref\":\"\"|\"baseHref\":\"/${{ env.REPO_NAME }}/\"|g" ngsw.json
+            
+            # Add base to all URLs
+            jq --arg base "/${{ env.REPO_NAME }}" '.[$base] = .[""]' ngsw.json > ngsw.tmp.json && mv ngsw.tmp.json ngsw.json
           fi
           
-          # Ensure proper paths in manifest
-          sed -i "s|\"start_url\": \"/|\"start_url\": \"/${{ env.REPO_NAME }}/|g" manifest.webmanifest
-          sed -i "s|\"scope\": \"/|\"scope\": \"/${{ env.REPO_NAME }}/|g" manifest.webmanifest
-          
-          # Create 404.html
+          # Create 404.html for GitHub Pages
           cp index.html 404.html
 
       - name: Setup Pages

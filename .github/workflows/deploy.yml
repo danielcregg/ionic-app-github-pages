@@ -316,9 +316,15 @@ jobs:
       - name: Build the Ionic PWA
         run: |
           cd $APP_PATH
-          ionic build --prod -- --base-href /${{ env.REPO_NAME }}/
+          # Build with base-href
+          ionic build --prod -- --base-href /${{ env.REPO_NAME }}/ --service-worker true
           # Copy index.html to 404.html for GitHub Pages SPA support
           cp www/index.html www/404.html
+          # Update the ngsw.json with the correct paths
+          if [ -f "www/ngsw.json" ]; then
+            sed -i "s|/manifest.webmanifest|/${{ env.REPO_NAME }}/manifest.webmanifest|g" www/ngsw.json
+            sed -i "s|/ngsw-worker.js|/${{ env.REPO_NAME }}/ngsw-worker.js|g" www/ngsw.json
+          fi
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

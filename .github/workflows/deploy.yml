@@ -190,9 +190,9 @@ jobs:
           cd $APP_PATH
           # Install @angular/service-worker matching the Angular version
           npm install @angular/service-worker@18.2.13 --save
-
-          # Add PWA support
-          npx ng add @angular/pwa@18.2.13 --project app --force --skip-confirmation || true
+          
+          # For PWA support, use the compatible version
+          npx @angular/cli@18.2.13 add @angular/pwa --project app --force --skip-confirmation || true
           
           # Create assets directories if they don't exist
           mkdir -p src/assets/icons

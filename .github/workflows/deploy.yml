@@ -70,15 +70,21 @@ jobs:
             echo "IS_STANDALONE=false" >> $GITHUB_ENV
           fi
 
-      - name: Add PWA support if not configured
-        if: ${{ env.PWA_ALREADY_CONFIGURED == 'false' }}
-        run: |
-          cd $APP_PATH
-          
-          # Install PWA dependencies
-          npm install @angular/service-worker@^18.0.0
-          
-          # Create assets directories if they don't exist
+          - name: Add PWA support if not configured
+          if: ${{ env.PWA_ALREADY_CONFIGURED == 'false' }}
+          run: |
+            cd $APP_PATH
+            
+            # Get Angular core version from package.json
+            ANGULAR_CORE_VERSION=$(node -p "require('./package.json').dependencies['@angular/core'] || require('./package.json').devDependencies['@angular/core']")
+            # Remove leading ^ or ~
+            ANGULAR_CORE_VERSION=$(echo $ANGULAR_CORE_VERSION | sed 's/^[\^~]//')
+            echo "Detected @angular/core version is $ANGULAR_CORE_VERSION"
+            
+            # Install PWA dependencies with matching version
+            npm install @angular/service-worker@$ANGULAR_CORE_VERSION
+            
+            # Create assets directories if they don't exist
           mkdir -p src/assets/icons
           mkdir -p src/assets/screenshots
           

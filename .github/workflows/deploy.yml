@@ -20,6 +20,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -74,28 +75,32 @@ jobs:
 
       # If not PWA configured, run ng add @angular/pwa
       - name: Add PWA support if not configured
-        if: env.PWA_ALREADY_CONFIGURED == 'false'
+        if: ${{ env.PWA_ALREADY_CONFIGURED == 'false' }}
         run: |
           cd $APP_PATH
           npx ng add @angular/pwa@latest --project app --force --skip-confirmation || true
 
       # If standalone, ensure provideServiceWorker and serviceWorker: true
       - name: Adjust standalone configuration if needed
-        if: env.IS_STANDALONE == 'true'
+        if: ${{ env.IS_STANDALONE == 'true' }}
         run: |
           cd $APP_PATH
+          # Ensure serviceWorker: true in angular.json
           if ! grep -q '"serviceWorker": true' angular.json; then
             sed -i 's|"outputHashing": "all"|&,\n          "serviceWorker": true|' angular.json
           fi
 
+          # Ensure provideServiceWorker in main.ts
           if ! grep -q 'provideServiceWorker(' src/main.ts; then
             if ! grep -q '@angular/service-worker' src/main.ts; then
               sed -i '1i import { provideServiceWorker } from "@angular/service-worker";' src/main.ts
             fi
+            # Insert provideServiceWorker call into providers array
+            # Using a safe sed expression and escaping single quotes
             sed -i '/bootstrapApplication(.*{ providers: \[/ s/\[/\[provideServiceWorker('\''ngsw-worker.js'\'', { enabled: environment.production }), /' src/main.ts
           fi
 
-      # Ensure manifest.webmanifest exists and is in angular.json assets
+      # Ensure manifest.webmanifest in project and angular.json
       - name: Ensure manifest.webmanifest in project
         run: |
           cd $APP_PATH
@@ -115,13 +120,12 @@ jobs:
 EOF
           fi
 
-          # Check if manifest.webmanifest is listed in assets
+          # Check if manifest.webmanifest is in assets array of angular.json
           if ! grep -q 'src/manifest.webmanifest' angular.json; then
-            # Install jq if not present (usually not needed but just in case)
             if ! command -v jq > /dev/null; then
               sudo apt-get update && sudo apt-get install -y jq
             fi
-            # Add manifest.webmanifest to angular.json assets using jq
+            # Add manifest.webmanifest to assets array
             jq '.projects.app.architect.build.options.assets += ["src/manifest.webmanifest"]' angular.json > angular_modified.json
             mv angular_modified.json angular.json
           fi

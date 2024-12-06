@@ -317,16 +317,16 @@ jobs:
         run: |
           cd $APP_PATH
           
-          # Install PWA dependencies with version matching Angular
+          # Install PWA dependencies
           npm install @angular/service-worker@^18.0.0
           
           # Configure environment.prod.ts
           echo "export const environment = { production: true };" > src/environments/environment.prod.ts
           
-          # Configure angular.json for PWA
+          # Update angular.json for PWA
           jq '.projects.app.architect.build.configurations.production += {"serviceWorker": true, "ngswConfigPath": "ngsw-config.json"}' angular.json > angular.tmp.json && mv angular.tmp.json angular.json
           
-          # Create ngsw-config.json for service worker
+          # Create ngsw-config.json
           cat > ngsw-config.json << EOF
           {
             "\$schema": "./node_modules/@angular/service-worker/config/schema.json",
@@ -337,13 +337,11 @@ jobs:
                 "installMode": "prefetch",
                 "resources": {
                   "files": [
-                    "/manifest.webmanifest",
+                    "/favicon.ico",
                     "/index.html",
+                    "/manifest.webmanifest",
                     "/*.css",
-                    "/*.js",
-                    "!/ngsw-worker.js",
-                    "!/*-es5*.js",
-                    "!/*-es2015*.js"
+                    "/*.js"
                   ]
                 }
               },
@@ -357,17 +355,11 @@ jobs:
                   ]
                 }
               }
-            ],
-            "navigationUrls": [
-              "/**",
-              "!/**/*.*",
-              "!/**/*__*",
-              "!/**/*__*/**"
             ]
           }
           EOF
           
-          # Configure manifest
+          # Update manifest
           cat > src/manifest.webmanifest << EOF
           {
             "name": "My Ionic PWA",
@@ -432,23 +424,18 @@ jobs:
           
           # Update index.html
           sed -i "s|<base href=\"/\">|<base href=\"/${{ env.REPO_NAME }}/\">|" src/index.html
-          
-          # Add manifest and theme-color meta
           sed -i '/<\/head>/i\  <link rel="manifest" href="manifest.webmanifest" crossorigin="use-credentials">' src/index.html
           sed -i '/<\/head>/i\  <meta name="theme-color" content="#1976d2">' src/index.html
-          
-          # Add service worker registration script
-          sed -i '/<\/body>/i\  <script>\n    if ("serviceWorker" in navigator) {\n      navigator.serviceWorker.register("ngsw-worker.js")\n        .catch(function(error) {\n          console.error("Service Worker registration failed:", error);\n        });\n    }\n  </script>' src/index.html
+          sed -i '/<\/body>/i\  <script>\n    if ("serviceWorker" in navigator) {\n      navigator.serviceWorker.register("ngsw-worker.js")\n        .then(reg => console.log("Service worker registered:", reg))\n        .catch(err => console.error("Service worker error:", err));\n    }\n  </script>' src/index.html
           
           # Build the app
-          ionic build --prod -- --base-href /${{ env.REPO_NAME }}/ --configuration=production
+          ionic build --prod -- --base-href="/${{ env.REPO_NAME }}/"
           
           # Post-build fixes
           cd www
           
           # Fix service worker paths
           if [ -f "ngsw.json" ]; then
-            # Add base to all URLs
             jq --arg base "/${{ env.REPO_NAME }}" '
               walk(
                 if type == "object" and has("installMode") then
@@ -458,9 +445,6 @@ jobs:
                 else .
                 end
               )' ngsw.json > ngsw.tmp.json && mv ngsw.tmp.json ngsw.json
-            
-            # Update base href in service worker
-            sed -i "s|\"baseHref\":\"\"|\"baseHref\":\"/${{ env.REPO_NAME }}/\"|g" ngsw.json
           fi
           
           # Create 404.html

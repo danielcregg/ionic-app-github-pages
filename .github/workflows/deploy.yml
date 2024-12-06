@@ -188,6 +188,10 @@ jobs:
         if: ${{ env.PWA_ALREADY_CONFIGURED == 'false' }}
         run: |
           cd $APP_PATH
+          # Install @angular/service-worker explicitly
+          npm install @angular/service-worker
+          
+          # Add PWA support
           npx ng add @angular/pwa@latest --project app --force --skip-confirmation || true
           
           # Create assets directories if they don't exist
@@ -196,6 +200,22 @@ jobs:
           
           # Install canvas package
           npm install canvas
+          
+          # Create or modify environment.ts if it doesn't exist
+          mkdir -p src/environments
+          cat > src/environments/environment.ts << EOF
+          export const environment = {
+            production: false,
+            baseHref: '/'
+          };
+          EOF
+          
+          cat > src/environments/environment.prod.ts << EOF
+          export const environment = {
+            production: true,
+            baseHref: '/${REPO_NAME}/'
+          };
+          EOF
           
           # Create icons and screenshots
           cat > create-assets.js << 'EOF'
@@ -259,12 +279,24 @@ jobs:
           if ! grep -q '"serviceWorker": true' angular.json; then
             sed -i 's|"outputHashing": "all"|&,\n          "serviceWorker": true|' angular.json
           fi
-          if ! grep -q 'provideServiceWorker(' src/main.ts; then
-            if ! grep -q '@angular/service-worker' src/main.ts; then
-              sed -i '1i import { provideServiceWorker } from "@angular/service-worker";' src/main.ts
-            fi
-            sed -i "/providers: \[/ s/\[/[provideServiceWorker('ngsw-worker.js', { enabled: environment.production }), /" src/main.ts
-          fi
+          
+          # Update main.ts with proper imports and configuration
+          cat > src/main.ts << EOF
+          import { importProvidersFrom } from '@angular/core';
+          import { bootstrapApplication } from '@angular/platform-browser';
+          import { provideServiceWorker } from '@angular/service-worker';
+          import { AppComponent } from './app/app.component';
+          import { environment } from './environments/environment';
+          
+          bootstrapApplication(AppComponent, {
+            providers: [
+              provideServiceWorker('ngsw-worker.js', {
+                enabled: environment.production,
+                registrationStrategy: 'registerWhenStable:30000'
+              })
+            ]
+          });
+          EOF
 
       - name: Build the Ionic PWA
         run: |

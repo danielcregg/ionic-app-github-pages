@@ -192,8 +192,8 @@ jobs:
             "theme_color": "#1976d2",
             "background_color": "#ffffff",
             "display": "standalone",
-            "scope": "/${{ env.REPO_NAME }}/",
-            "start_url": "/${{ env.REPO_NAME }}/index.html",
+            "scope": "/$REPO_NAME/",
+            "start_url": "/$REPO_NAME/index.html",
             "icons": [
               {
                 "src": "assets/icons/icon-72x72.png",
@@ -251,12 +251,18 @@ jobs:
           jq '.projects.app.architect.build.configurations.production += {"serviceWorker": true, "ngswConfigPath": "ngsw-config.json"}' angular.json > angular.tmp.json && mv angular.tmp.json angular.json
           
           # Update index.html
-          sed -i "s|<base href=\"/\">|<base href=\"/${{ env.REPO_NAME }}/\">|" src/index.html
+          sed -i "s|<base href=\"/\">|<base href=\"/$REPO_NAME/\">|" src/index.html
           sed -i '/<\/head>/i\  <link rel="manifest" href="manifest.webmanifest" crossorigin="use-credentials">\n  <meta name="theme-color" content="#1976d2">' src/index.html
-          sed -i "s|<your-repo-name>|${{ env.REPO_NAME }}|g" src/index.html
+          sed -i "s|<your-repo-name>|$REPO_NAME|g" src/index.html
           
           # Add service worker registration script
-          sed -i '/<\/body>/i\  <script>\n    if ("serviceWorker" in navigator) {\n      window.addEventListener("load", function() {\n        navigator.serviceWorker.register("ngsw-worker.js", { scope: "/${{ env.REPO_NAME }}/" })\n          .then(function(registration) { console.log("SW registered:", registration.scope); })\n          .catch(function(error) { console.error("SW registration failed:", error); });\n      });\n    }\n  </script>' src/index.html
+          sed -i '/<\/body>/i\  <script>\n    if ("serviceWorker" in navigator) {\n      window.addEventListener("load", function() {\n        navigator.serviceWorker.register("ngsw-worker.js", { scope: "/$REPO_NAME/" })\n          .then(function(registration) { console.log("SW registered:", registration.scope); })\n          .catch(function(error) { console.error("SW registration failed:", error); });\n      });\n    }\n  </script>' src/index.html
+        shell: /usr/bin/bash -e {0}
+        env:
+          REPO_NAME: $REPO_NAME
+          APP_PATH: $APP_PATH
+          PWA_ALREADY_CONFIGURED: $PWA_ALREADY_CONFIGURED
+          IS_STANDALONE: $IS_STANDALONE
 
       - name: Build the Ionic PWA
         run: |
@@ -267,7 +273,7 @@ jobs:
           echo "export const environment = { production: true };" > src/environments/environment.prod.ts
           
           # Build the app with PWA support
-          ionic build --configuration=production -- --base-href="/${{ env.REPO_NAME }}/" --deploy-url="/${{ env.REPO_NAME }}/" --service-worker=true
+          ionic build --configuration=production -- --base-href="/$REPO_NAME/" --deploy-url="/$REPO_NAME/" --service-worker=true
           
           # Post-build fix: Create 404.html
           cd www

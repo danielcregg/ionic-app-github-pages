@@ -63,7 +63,7 @@ jobs:
             echo "PWA_ALREADY_CONFIGURED=false" >> $GITHUB_ENV
           fi
 
-      # Check if app is standalone by looking for 'bootstrapApplication'
+      # Check if app is standalone
       - name: Check if app is standalone
         run: |
           cd $APP_PATH
@@ -104,7 +104,7 @@ jobs:
           cd $APP_PATH
           if [ ! -f "src/manifest.webmanifest" ]; then
             echo "src/manifest.webmanifest not found. Creating a default manifest."
-            cat > src/manifest.webmanifest <<'EOF'
+            cat > src/manifest.webmanifest <<EOF
 {
   "name": "My Ionic PWA",
   "short_name": "IonicPWA",

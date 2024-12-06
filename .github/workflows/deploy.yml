@@ -251,15 +251,146 @@ jobs:
         run: |
           cd $APP_PATH
           
-          # Build with specific configurations
-          ionic build --prod -- --base-href /${{ env.REPO_NAME }}/ --service-worker true
+          # Install PWA dependencies
+          npm install @angular/service-worker@^18.0.0
+          
+          # Configure environment
+          mkdir -p src/environments
+          echo "export const environment = { production: true };" > src/environments/environment.prod.ts
+          
+          # Remove existing ngsw-config.json and manifest to avoid conflicts
+          rm -f ngsw-config.json src/manifest.webmanifest
+          
+          # Create ngsw-config.json
+          cat > ngsw-config.json << EOF
+          {
+            "\$schema": "./node_modules/@angular/service-worker/config/schema.json",
+            "index": "/index.html",
+            "assetGroups": [
+              {
+                "name": "app",
+                "installMode": "prefetch",
+                "resources": {
+                  "files": [
+                    "/favicon.ico",
+                    "/index.html",
+                    "/manifest.webmanifest",
+                    "/*.css",
+                    "/*.js",
+                    "/ngsw.json",
+                    "/ngsw-worker.js"
+                  ]
+                }
+              },
+              {
+                "name": "assets",
+                "installMode": "lazy",
+                "updateMode": "prefetch",
+                "resources": {
+                  "files": [
+                    "/assets/**"
+                  ]
+                }
+              }
+            ],
+            "navigationUrls": [
+              "/**",
+              "!/**/*.*",
+              "!/**/*__*",
+              "!/**/*__*/**"
+            ]
+          }
+          EOF
+          
+          # Create manifest
+          cat > src/manifest.webmanifest << EOF
+          {
+            "name": "My Ionic PWA",
+            "short_name": "IonicPWA",
+            "theme_color": "#1976d2",
+            "background_color": "#ffffff",
+            "display": "standalone",
+            "scope": "/${{ env.REPO_NAME }}/",
+            "start_url": "/${{ env.REPO_NAME }}/",
+            "orientation": "any",
+            "icons": [
+              {
+                "src": "assets/icons/icon-72x72.png",
+                "sizes": "72x72",
+                "type": "image/png",
+                "purpose": "maskable any"
+              },
+              {
+                "src": "assets/icons/icon-96x96.png",
+                "sizes": "96x96",
+                "type": "image/png",
+                "purpose": "maskable any"
+              },
+              {
+                "src": "assets/icons/icon-128x128.png",
+                "sizes": "128x128",
+                "type": "image/png",
+                "purpose": "maskable any"
+              },
+              {
+                "src": "assets/icons/icon-144x144.png",
+                "sizes": "144x144",
+                "type": "image/png",
+                "purpose": "maskable any"
+              },
+              {
+                "src": "assets/icons/icon-152x152.png",
+                "sizes": "152x152",
+                "type": "image/png",
+                "purpose": "maskable any"
+              },
+              {
+                "src": "assets/icons/icon-192x192.png",
+                "sizes": "192x192",
+                "type": "image/png",
+                "purpose": "maskable any"
+              },
+              {
+                "src": "assets/icons/icon-384x384.png",
+                "sizes": "384x384",
+                "type": "image/png",
+                "purpose": "maskable any"
+              },
+              {
+                "src": "assets/icons/icon-512x512.png",
+                "sizes": "512x512",
+                "type": "image/png",
+                "purpose": "maskable any"
+              }
+            ]
+          }
+          EOF
+          
+          # Update angular.json for PWA
+          jq '.projects.app.architect.build.configurations.production += {"serviceWorker": true, "ngswConfigPath": "ngsw-config.json"}' angular.json > angular.tmp.json && mv angular.tmp.json angular.json
+          
+          # Update index.html
+          sed -i "s|<base href=\"/\">|<base href=\"/${{ env.REPO_NAME }}/\">|" src/index.html
+          sed -i 's|<link rel="manifest" href=".*">|<link rel="manifest" href="manifest.webmanifest" crossorigin="use-credentials">|' src/index.html
+          sed -i '/<link rel="manifest"/i\  <meta name="theme-color" content="#1976d2">\n  <meta name="mobile-web-app-capable" content="yes">' src/index.html
+          
+          # Add service worker registration script
+          sed -i '/<\/body>/i\  <script>\n    if ("serviceWorker" in navigator) {\n      window.addEventListener("load", function() {\n        navigator.serviceWorker.register("ngsw-worker.js", { scope: "/${{ env.REPO_NAME }}/" })\n          .then(function(registration) { console.log("SW registered:", registration.scope); })\n          .catch(function(error) { console.error("SW registration failed:", error); });\n      });\n    }\n  </script>' src/index.html
+          
+          # Build the app
+          ionic build --prod -- --base-href="/${{ env.REPO_NAME }}/" --service-worker true
           
           # Post-build fixes
           cd www
           
-          # Fix service worker paths
+          # Update ngsw.json paths
           if [ -f "ngsw.json" ]; then
-            jq --arg base "/${{ env.REPO_NAME }}" '.[$base] = .[""]' ngsw.json > ngsw.tmp.json && mv ngsw.tmp.json ngsw.json
+            jq --arg base "/${{ env.REPO_NAME }}/" \
+              '(["/manifest.webmanifest", "/ngsw.json", "/ngsw-worker.js"] | map(. as $path | {"key": $path, "value": $base + $path})) as $updates |
+              . + {($base): (."/" + {
+                "baseHref": $base,
+                "hashTable": (."/".hashTable + (["/manifest.webmanifest", "/ngsw.json", "/ngsw-worker.js"] | map({key: ., value: ."/".hashTable[.]})|from_entries))
+              })}' ngsw.json > ngsw.tmp.json && mv ngsw.tmp.json ngsw.json
           fi
           
           # Create 404.html

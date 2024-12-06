@@ -1,6 +1,6 @@
 # Ionic App GitHub Pages Deployment Example
 
-Check out this Ionic App deployed to GitHub Pages: [My Ionic App](https://<your-username>.github.io/<your-repo-name>/)
+Check out this Ionic App deployed to GitHub Pages: [My Ionic App](https://danielcregg.github.io/ionic-app-github-pages-pwa/))
 
 Please note it is also deployed as an installable Progressive Web App (PWA).
 

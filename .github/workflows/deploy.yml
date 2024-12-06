@@ -144,8 +144,8 @@ jobs:
           # Generate all assets
           node create-assets.js
 
-          # Create PWA configuration in root directory
-          cat > ngsw-config.json << EOF
+          # Create ngsw-config.json in src directory
+          cat > src/ngsw-config.json << EOF
           {
             "\$schema": "./node_modules/@angular/service-worker/config/schema.json",
             "index": "/index.html",
@@ -160,7 +160,8 @@ jobs:
                     "/manifest.webmanifest",
                     "/*.css",
                     "/*.js",
-                    "!/ngsw-worker.js"
+                    "!/ngsw-worker.js",
+                    "/*.(svg|cur|jpg|jpeg|png|apng|webp|avif|gif|otf|ttf|woff|woff2)"
                   ]
                 }
               },
@@ -181,13 +182,15 @@ jobs:
               "!/**/*.*",
               "!/**/*__*",
               "!/**/*__*/**"
-            ]
+            ],
+            "dataGroups": []
           }
           EOF
 
-          # Update angular.json with PWA configuration
+          # Update angular.json with correct PWA configuration
           jq '.projects.app.architect.build.options.assets += [
             "src/manifest.webmanifest",
+            "src/ngsw-worker.js",
             {
               "glob": "**/*",
               "input": "src/assets",
@@ -195,7 +198,7 @@ jobs:
             }
           ] | .projects.app.architect.build.configurations.production += {
             "serviceWorker": true,
-            "ngswConfigPath": "ngsw-config.json"
+            "ngswConfigPath": "src/ngsw-config.json"
           }' angular.json > angular.tmp.json && mv angular.tmp.json angular.json
 
           # Create manifest.webmanifest in src folder
@@ -282,14 +285,19 @@ jobs:
           mkdir -p src/environments
           echo "export const environment = { production: true };" > src/environments/environment.prod.ts
           
+          # Update main.ts to include service worker
+          if ! grep -q "provideServiceWorker" src/main.ts; then
+            sed -i '/import { routes } from/i import { provideServiceWorker } from "@angular/service-worker";' src/main.ts
+            sed -i '/providers: \[/a\    provideServiceWorker("ngsw-worker.js", { enabled: environment.production }),' src/main.ts
+          fi
+          
           # Build the app with PWA support
           ng build \
             --configuration=production \
             --base-href="/$REPO_NAME/" \
-            --deploy-url="/$REPO_NAME/" \
-            --service-worker=true
+            --deploy-url="/$REPO_NAME/"
           
-          # Post-build fix: Create 404.html
+          # Post-build fixes
           cd www
           cp index.html 404.html
 

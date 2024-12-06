@@ -95,17 +95,15 @@ jobs:
           cd $APP_PATH
           if [ ! -f "src/manifest.webmanifest" ]; then
             echo "src/manifest.webmanifest not found. Creating a default manifest."
-            cat > "src/manifest.webmanifest" << EOF
-{
-  "name": "My Ionic PWA",
-  "short_name": "IonicPWA",
-  "start_url": "/${REPO_NAME}/",
-  "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#1976d2",
-  "icons": []
-}
-EOF
+            echo '{
+              "name": "My Ionic PWA",
+              "short_name": "IonicPWA",
+              "start_url": "/${REPO_NAME}/",
+              "display": "standalone",
+              "background_color": "#ffffff",
+              "theme_color": "#1976d2",
+              "icons": []
+            }' > src/manifest.webmanifest
           fi
 
           if ! grep -q "src/manifest.webmanifest" angular.json; then
@@ -133,4 +131,4 @@ EOF
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4c
+        uses: actions/deploy-pages@v4

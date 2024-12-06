@@ -260,7 +260,7 @@ jobs:
           echo "export const environment = { production: true };" > src/environments/environment.prod.ts
           
           # Build the app with PWA support
-          ionic build --prod -- --base-href="/${{ env.REPO_NAME }}/" --service-worker=true
+          ionic build --configuration=production -- --base-href="/${{ env.REPO_NAME }}/" --deploy-url="/${{ env.REPO_NAME }}/" --service-worker=true
           
           # Post-build fix: Create 404.html
           cd www

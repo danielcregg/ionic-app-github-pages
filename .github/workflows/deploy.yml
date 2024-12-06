@@ -75,6 +75,114 @@ jobs:
         run: |
           cd $APP_PATH
           npx ng add @angular/pwa@latest --project app --force --skip-confirmation || true
+          
+          # Create screenshots directory if it doesn't exist
+          mkdir -p src/assets/screenshots
+          
+          # Create placeholder screenshots using HTML5 Canvas
+          cat > create-screenshots.js << 'EOF'
+          const { createCanvas } = require('canvas');
+          const fs = require('fs');
+          
+          // Create desktop screenshot (1920x1080)
+          const desktopCanvas = createCanvas(1920, 1080);
+          const dctx = desktopCanvas.getContext('2d');
+          dctx.fillStyle = '#ffffff';
+          dctx.fillRect(0, 0, 1920, 1080);
+          dctx.fillStyle = '#000000';
+          dctx.font = '48px Arial';
+          dctx.fillText('Desktop Screenshot', 800, 540);
+          fs.writeFileSync('src/assets/screenshots/desktop.png', desktopCanvas.toBuffer());
+          
+          // Create mobile screenshot (750x1334)
+          const mobileCanvas = createCanvas(750, 1334);
+          const mctx = mobileCanvas.getContext('2d');
+          mctx.fillStyle = '#ffffff';
+          mctx.fillRect(0, 0, 750, 1334);
+          mctx.fillStyle = '#000000';
+          mctx.font = '32px Arial';
+          mctx.fillText('Mobile Screenshot', 250, 667);
+          fs.writeFileSync('src/assets/screenshots/mobile.png', mobileCanvas.toBuffer());
+          EOF
+          
+          # Install canvas package to create screenshots
+          npm install canvas
+          node create-screenshots.js
+          
+          # Update manifest to include screenshots and correct icon purposes
+          cat > src/manifest.webmanifest << 'EOF'
+          {
+            "name": "My Ionic PWA",
+            "short_name": "IonicPWA",
+            "start_url": "/${REPO_NAME}/",
+            "display": "standalone",
+            "background_color": "#ffffff",
+            "theme_color": "#1976d2",
+            "icons": [
+              {
+                "src": "assets/icons/icon-72x72.png",
+                "sizes": "72x72",
+                "type": "image/png",
+                "purpose": "any"
+              },
+              {
+                "src": "assets/icons/icon-96x96.png",
+                "sizes": "96x96",
+                "type": "image/png",
+                "purpose": "any"
+              },
+              {
+                "src": "assets/icons/icon-128x128.png",
+                "sizes": "128x128",
+                "type": "image/png",
+                "purpose": "any"
+              },
+              {
+                "src": "assets/icons/icon-144x144.png",
+                "sizes": "144x144",
+                "type": "image/png",
+                "purpose": "any"
+              },
+              {
+                "src": "assets/icons/icon-152x152.png",
+                "sizes": "152x152",
+                "type": "image/png",
+                "purpose": "any"
+              },
+              {
+                "src": "assets/icons/icon-192x192.png",
+                "sizes": "192x192",
+                "type": "image/png",
+                "purpose": "any"
+              },
+              {
+                "src": "assets/icons/icon-384x384.png",
+                "sizes": "384x384",
+                "type": "image/png",
+                "purpose": "any"
+              },
+              {
+                "src": "assets/icons/icon-512x512.png",
+                "sizes": "512x512",
+                "type": "image/png",
+                "purpose": "any"
+              }
+            ],
+            "screenshots": [
+              {
+                "src": "assets/screenshots/desktop.png",
+                "sizes": "1920x1080",
+                "type": "image/png",
+                "form_factor": "wide"
+              },
+              {
+                "src": "assets/screenshots/mobile.png",
+                "sizes": "750x1334",
+                "type": "image/png"
+              }
+            ]
+          }
+          EOF
 
       - name: Adjust standalone configuration if needed
         if: ${{ env.IS_STANDALONE == 'true' }}
@@ -102,7 +210,69 @@ jobs:
               "display": "standalone",
               "background_color": "#ffffff",
               "theme_color": "#1976d2",
-              "icons": []
+              "icons": [
+                {
+                  "src": "assets/icons/icon-72x72.png",
+                  "sizes": "72x72",
+                  "type": "image/png",
+                  "purpose": "any"
+                },
+                {
+                  "src": "assets/icons/icon-96x96.png",
+                  "sizes": "96x96",
+                  "type": "image/png",
+                  "purpose": "any"
+                },
+                {
+                  "src": "assets/icons/icon-128x128.png",
+                  "sizes": "128x128",
+                  "type": "image/png",
+                  "purpose": "any"
+                },
+                {
+                  "src": "assets/icons/icon-144x144.png",
+                  "sizes": "144x144",
+                  "type": "image/png",
+                  "purpose": "any"
+                },
+                {
+                  "src": "assets/icons/icon-152x152.png",
+                  "sizes": "152x152",
+                  "type": "image/png",
+                  "purpose": "any"
+                },
+                {
+                  "src": "assets/icons/icon-192x192.png",
+                  "sizes": "192x192",
+                  "type": "image/png",
+                  "purpose": "any"
+                },
+                {
+                  "src": "assets/icons/icon-384x384.png",
+                  "sizes": "384x384",
+                  "type": "image/png",
+                  "purpose": "any"
+                },
+                {
+                  "src": "assets/icons/icon-512x512.png",
+                  "sizes": "512x512",
+                  "type": "image/png",
+                  "purpose": "any"
+                }
+              ],
+              "screenshots": [
+                {
+                  "src": "assets/screenshots/desktop.png",
+                  "sizes": "1920x1080",
+                  "type": "image/png",
+                  "form_factor": "wide"
+                },
+                {
+                  "src": "assets/screenshots/mobile.png",
+                  "sizes": "750x1334",
+                  "type": "image/png"
+                }
+              ]
             }' > src/manifest.webmanifest
           fi
 

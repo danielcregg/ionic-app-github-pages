@@ -317,16 +317,72 @@ jobs:
         run: |
           cd $APP_PATH
           
-          # Install @angular/pwa if not present
-          if ! grep -q "@angular/service-worker" package.json; then
-            npm install @angular/service-worker
-            npx ng add @angular/pwa@latest --project app --force --skip-confirmation || true
-          fi
+          # Install PWA dependencies
+          npm install @angular/service-worker
+          npm install @angular/pwa
           
-          # Ensure ngsw-config.json exists
-          cat > ngsw-config.json << 'EOF'
+          # Configure PWA
+          npx ng add @angular/pwa@latest --project app --skip-confirmation
+          
+          # Update manifest with correct paths
+          cat > src/manifest.webmanifest << EOF
           {
-            "$schema": "./node_modules/@angular/service-worker/config/schema.json",
+            "name": "My Ionic PWA",
+            "short_name": "IonicPWA",
+            "theme_color": "#1976d2",
+            "background_color": "#ffffff",
+            "display": "standalone",
+            "scope": "/${{ env.REPO_NAME }}/",
+            "start_url": "/${{ env.REPO_NAME }}/",
+            "icons": [
+              {
+                "src": "assets/icons/icon-72x72.png",
+                "sizes": "72x72",
+                "type": "image/png"
+              },
+              {
+                "src": "assets/icons/icon-96x96.png",
+                "sizes": "96x96",
+                "type": "image/png"
+              },
+              {
+                "src": "assets/icons/icon-128x128.png",
+                "sizes": "128x128",
+                "type": "image/png"
+              },
+              {
+                "src": "assets/icons/icon-144x144.png",
+                "sizes": "144x144",
+                "type": "image/png"
+              },
+              {
+                "src": "assets/icons/icon-152x152.png",
+                "sizes": "152x152",
+                "type": "image/png"
+              },
+              {
+                "src": "assets/icons/icon-192x192.png",
+                "sizes": "192x192",
+                "type": "image/png"
+              },
+              {
+                "src": "assets/icons/icon-384x384.png",
+                "sizes": "384x384",
+                "type": "image/png"
+              },
+              {
+                "src": "assets/icons/icon-512x512.png",
+                "sizes": "512x512",
+                "type": "image/png"
+              }
+            ]
+          }
+          EOF
+          
+          # Update ngsw-config.json
+          cat > ngsw-config.json << EOF
+          {
+            "\$schema": "./node_modules/@angular/service-worker/config/schema.json",
             "index": "/index.html",
             "assetGroups": [
               {
@@ -353,101 +409,48 @@ jobs:
                   ]
                 }
               }
-            ]
-          }
-          EOF
-          
-          # Update manifest.webmanifest with correct paths
-          cat > src/manifest.webmanifest << EOF
-          {
-            "name": "My Ionic PWA",
-            "short_name": "IonicPWA",
-            "start_url": "/${{ env.REPO_NAME }}/",
-            "scope": "/${{ env.REPO_NAME }}/",
-            "display": "standalone",
-            "background_color": "#ffffff",
-            "theme_color": "#1976d2",
-            "icons": [
-              {
-                "src": "assets/icons/icon-72x72.png",
-                "sizes": "72x72",
-                "type": "image/png",
-                "purpose": "any"
-              },
-              {
-                "src": "assets/icons/icon-96x96.png",
-                "sizes": "96x96",
-                "type": "image/png",
-                "purpose": "any"
-              },
-              {
-                "src": "assets/icons/icon-128x128.png",
-                "sizes": "128x128",
-                "type": "image/png",
-                "purpose": "any"
-              },
-              {
-                "src": "assets/icons/icon-144x144.png",
-                "sizes": "144x144",
-                "type": "image/png",
-                "purpose": "any"
-              },
-              {
-                "src": "assets/icons/icon-152x152.png",
-                "sizes": "152x152",
-                "type": "image/png",
-                "purpose": "any"
-              },
-              {
-                "src": "assets/icons/icon-192x192.png",
-                "sizes": "192x192",
-                "type": "image/png",
-                "purpose": "any"
-              },
-              {
-                "src": "assets/icons/icon-384x384.png",
-                "sizes": "384x384",
-                "type": "image/png",
-                "purpose": "any"
-              },
-              {
-                "src": "assets/icons/icon-512x512.png",
-                "sizes": "512x512",
-                "type": "image/png",
-                "purpose": "any"
-              }
+            ],
+            "dataGroups": [],
+            "navigationUrls": [
+              "/**",
+              "!/**/*.*",
+              "!/**/*__*",
+              "!/**/*__*/**"
             ]
           }
           EOF
           
           # Update angular.json for PWA
-          if ! grep -q '"serviceWorker": true' angular.json; then
-            sed -i 's|"outputHashing": "all"|"outputHashing": "all",\n            "serviceWorker": true,\n            "ngswConfigPath": "ngsw-config.json"|' angular.json
-          fi
-          
-          # Update main.ts for service worker
-          if ! grep -q 'provideServiceWorker(' src/main.ts; then
-            sed -i '1i import { provideServiceWorker } from "@angular/service-worker";' src/main.ts
-            sed -i '1i import { environment } from "./environments/environment";' src/main.ts
-            sed -i "/providers: \[/a\    provideServiceWorker('ngsw-worker.js', { enabled: environment.production })," src/main.ts
-          fi
+          jq '.projects.app.architect.build.configurations.production += {"serviceWorker": true, "ngswConfigPath": "ngsw-config.json"}' angular.json > angular.tmp.json && mv angular.tmp.json angular.json
           
           # Update index.html
-          sed -i "s|<base href=\"/\">|<base href=\"/${{ env.REPO_NAME }}/\">|" src/index.html
-          if ! grep -q "manifest.webmanifest" src/index.html; then
-            sed -i '/<\/head>/i\  <link rel="manifest" href="manifest.webmanifest" crossorigin="use-credentials">' src/index.html
-          fi
+          sed -i 's|<base href="/"|<base href="/${{ env.REPO_NAME }}/"|' src/index.html
+          sed -i '/<\/head>/i\  <link rel="manifest" href="manifest.webmanifest" crossorigin="use-credentials">' src/index.html
+          sed -i '/<\/head>/i\  <meta name="theme-color" content="#1976d2">' src/index.html
           
-          # Build with specific configurations
+          # Build the app
           ionic build --prod -- --base-href /${{ env.REPO_NAME }}/ --service-worker true
           
-          # Update service worker paths
-          if [ -f "www/ngsw.json" ]; then
-            jq --arg base "/${{ env.REPO_NAME }}/" '.[$base] = .[""] | .[$base].baseHref = $base' www/ngsw.json > www/ngsw.tmp.json && mv www/ngsw.tmp.json www/ngsw.json
+          # Fix service worker paths in built files
+          cd www
+          
+          # Update ngsw.json paths
+          if [ -f "ngsw.json" ]; then
+            # Add base to all URLs
+            jq --arg base "/${{ env.REPO_NAME }}" '
+              walk(
+                if type == "object" and has("installMode") then
+                  .resources.files |= map(
+                    if startswith("/") then $base + . else . end
+                  )
+                else .
+                end
+              )
+            ' ngsw.json > ngsw.tmp.json && mv ngsw.tmp.json ngsw.json
           fi
           
-          # Ensure 404.html exists
-          cp www/index.html www/404.html
+          # Create 404.html
+          cp index.html 404.html
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

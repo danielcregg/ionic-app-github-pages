@@ -67,7 +67,7 @@ jobs:
         if: env.PWA_ALREADY_CONFIGURED == 'false'
         run: |
           cd $APP_PATH
-          npx ng add @angular/pwa --project app --force --skip-confirmation
+          npx ng add @angular/pwa@latest --project app --force --skip-confirmation
 
       - name: Build the Ionic PWA
         run: |

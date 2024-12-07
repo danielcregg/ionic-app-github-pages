@@ -196,12 +196,12 @@ jobs:
                     "/index.html",
                     "/manifest.webmanifest",
                     "/*.css",
-                    "/*.js",
-                    "!/ngsw-worker.js"
+                    "/*.js"
                   ]
                 }
               },
               {
+                "name": "assets",
                 "name": "assets",
                 "installMode": "lazy",
                 "updateMode": "prefetch",
@@ -214,7 +214,7 @@ jobs:
               }
             ],
             "navigationUrls": [
-              "/**",
+              "!/tabs/**/*.{js,css,json,jpg,jpeg,png,gif,webp,ico,woff,woff2}",
               "!/**/*.{js,css,json,jpg,jpeg,png,gif,webp,ico,woff,woff2}",
               "!/**/*__*",
               "!/**/*__*/**"
@@ -291,6 +291,29 @@ jobs:
           # Post-build fixes for PWA
           cd www
           cp index.html 404.html
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v1
+        with:
+          path: '${{ env.APP_PATH }}/www'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v1
+
+          # Add routing handler to index.html
+          sed -i '/<head>/a\
+          <script>\
+            (function() {\
+              var l = location.href;\
+              if (l.indexOf("?") > -1) {\
+                sessionStorage.redirect = l.substr(0, l.indexOf("?"));\
+              }\
+            })();\
+          </script>' index.html
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

@@ -79,7 +79,26 @@ jobs:
         run: |
           cd $APP_PATH
 
-          # 1. Create the manifest file
+          # Create icons directory
+          mkdir -p src/assets/icons
+
+          # Generate PWA icons from resources/icon.png if it exists, otherwise use a default icon
+          if [ -f "resources/icon.png" ]; then
+            SOURCE_ICON="resources/icon.png"
+          elif [ -f "src/assets/icon/favicon.png" ]; then
+            SOURCE_ICON="src/assets/icon/favicon.png"
+          else
+            # Create a default icon if none exists
+            convert -size 512x512 xc:white -font Arial -pointsize 40 -gravity center -draw "text 0,0 'PWA'" PNG24:src/assets/icons/default-icon.png
+            SOURCE_ICON="src/assets/icons/default-icon.png"
+          fi
+
+          # Generate various icon sizes
+          for size in 72 96 128 144 152 192 384 512; do
+            convert "$SOURCE_ICON" -resize ${size}x${size} src/assets/icons/icon-${size}x${size}.png
+          done
+
+          # Create manifest.webmanifest with all icon sizes
           cat > src/manifest.webmanifest << EOF
           {
             "name": "Ionic PWA App",
@@ -97,6 +116,42 @@ jobs:
                 "purpose": "maskable any"
               },
               {
+                "src": "assets/icons/icon-96x96.png",
+                "sizes": "96x96",
+                "type": "image/png",
+                "purpose": "maskable any"
+              },
+              {
+                "src": "assets/icons/icon-128x128.png",
+                "sizes": "128x128",
+                "type": "image/png",
+                "purpose": "maskable any"
+              },
+              {
+                "src": "assets/icons/icon-144x144.png",
+                "sizes": "144x144",
+                "type": "image/png",
+                "purpose": "maskable any"
+              },
+              {
+                "src": "assets/icons/icon-152x152.png",
+                "sizes": "152x152",
+                "type": "image/png",
+                "purpose": "maskable any"
+              },
+              {
+                "src": "assets/icons/icon-192x192.png",
+                "sizes": "192x192",
+                "type": "image/png",
+                "purpose": "maskable any"
+              },
+              {
+                "src": "assets/icons/icon-384x384.png",
+                "sizes": "384x384",
+                "type": "image/png",
+                "purpose": "maskable any"
+              },
+              {
                 "src": "assets/icons/icon-512x512.png",
                 "sizes": "512x512",
                 "type": "image/png",
@@ -106,10 +161,8 @@ jobs:
           }
           EOF
 
-          # 2. Create icons directory and sample icons
-          mkdir -p src/assets/icons
-          cp src/assets/icon/favicon.png src/assets/icons/icon-72x72.png 2>/dev/null || :
-          cp src/assets/icon/favicon.png src/assets/icons/icon-512x512.png 2>/dev/null || :
+          # Install ImageMagick for icon generation
+          sudo apt-get update && sudo apt-get install -y imagemagick
 
           # 3. Create ngsw-config.json
           cat > src/ngsw-config.json << EOF

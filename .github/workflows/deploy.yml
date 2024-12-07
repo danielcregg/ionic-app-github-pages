@@ -219,7 +219,7 @@ jobs:
           
           # Update main.ts to include service worker
           if ! grep -q "provideServiceWorker" src/main.ts; then
-            sed -i '1i import { provideServiceWorker } from "@angular/service-worker";' src.main.ts
+            sed -i '1i import { provideServiceWorker } from "@angular/service-worker";' src/main.ts
             if [ "$IS_STANDALONE" = "true" ]; then
               sed -i '/providers: \[/a\    provideServiceWorker("ngsw-worker.js", { enabled: environment.production }),\n    { provide: "BASE_URL", useValue: "/$REPO_NAME/" },' src/main.ts
             else

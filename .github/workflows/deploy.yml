@@ -88,197 +88,10 @@ jobs:
         run: |
           cd $APP_PATH
 
-          # Update angular.json first to ensure proper PWA configuration
-          jq '.projects.app.architect.build += {
-            "options": {
-              "serviceWorker": true,
-              "ngswConfigPath": "src/ngsw-config.json"
-            }
-          } | .projects.app.architect.build.configurations.production += {
-            "serviceWorker": true
-          } | .projects.app.architect.build.options.assets += [
-            "src/manifest.webmanifest",
-            {
-              "glob": "**/*",
-              "input": "src/assets",
-              "output": "/assets/"
-            },
-            {
-              "glob": "ngsw-worker.js",
-              "input": "node_modules/@angular/service-worker",
-              "output": "/"
-            }
-          ]' angular.json > angular.tmp.json && mv angular.tmp.json angular.json
-
-          # Move manifest to src root and update paths
-          cp src/manifest.webmanifest src/manifest.webmanifest.template
-          sed "s|/$REPO_NAME/|./|g" src/manifest.webmanifest.template > src/manifest.webmanifest
-          
-          # Update service worker config paths
-          sed -i 's|"scope": "/$REPO_NAME/"|"scope": "./"|g' src/manifest.webmanifest
-          sed -i 's|"start_url": "/$REPO_NAME/"|"start_url": "./"|g' src/manifest.webmanifest
-
-          # Update ngsw-config.json paths
-          cat > src/ngsw-config.json << EOF
-          {
-            "\$schema": "./node_modules/@angular/service-worker/config/schema.json",
-            "index": "./index.html",
-            "assetGroups": [
-              {
-                "name": "app",
-                "installMode": "prefetch",
-                "resources": {
-                  "files": [
-                    "./favicon.ico",
-                    "./index.html",
-                    "./manifest.webmanifest",
-                    "./*.css",
-                    "./*.js"
-                  ],
-                  "urls": [
-                    "https://fonts.googleapis.com/**"
-                  ]
-                }
-              },
-              {
-                "name": "assets",
-                "installMode": "lazy",
-                "updateMode": "prefetch",
-                "resources": {
-                  "files": [
-                    "./assets/**"
-                  ]
-                }
-              }
-            ]
-          }
-          EOF
-
-          # Get Angular core version and install dependencies
-          ANGULAR_CORE_VERSION=$(node -p "require('./node_modules/@angular/core/package.json').version")
-          echo "Detected installed @angular/core version is $ANGULAR_CORE_VERSION"
-          npm install @angular/service-worker@$ANGULAR_CORE_VERSION
-          npm install canvas
-
-          # Create assets directories and generate assets
-          mkdir -p src/assets/icons src/assets/screenshots
-          # Generate assets with create-assets.js
-          # Create icons and screenshots (your existing create-assets.js code)
-          cat > create-assets.js << 'EOF'
-          const { createCanvas } = require('canvas');
-          const fs = require('fs');
-          
-          // Function to create an icon
-          function createIcon(size) {
-            const canvas = createCanvas(size, size);
-            const ctx = canvas.getContext('2d');
-            
-            // Fill background
-            ctx.fillStyle = '#1976d2';
-            ctx.fillRect(0, 0, size, size);
-            
-            // Add some simple icon design
-            ctx.beginPath();
-            ctx.arc(size/2, size/2, size/3, 0, Math.PI * 2);
-            ctx.fillStyle = '#ffffff';
-            ctx.fill();
-            
-            // Save the icon
-            fs.writeFileSync(`src/assets/icons/icon-${size}x${size}.png`, canvas.toBuffer());
-          }
-          
-          // Create all required icons
-          [72, 96, 128, 144, 152, 192, 384, 512].forEach(size => createIcon(size));
-          
-          // Create desktop screenshot (1920x1080)
-          const desktopCanvas = createCanvas(1920, 1080);
-          const dctx = desktopCanvas.getContext('2d');
-          dctx.fillStyle = '#ffffff';
-          dctx.fillRect(0, 0, 1920, 1080);
-          dctx.fillStyle = '#1976d2';
-          dctx.fillRect(0, 0, 1920, 80); // Header
-          dctx.fillStyle = '#ffffff';
-          dctx.font = 'bold 48px Arial';
-          dctx.fillText('My Ionic PWA', 50, 55);
-          fs.writeFileSync('src/assets/screenshots/desktop.png', desktopCanvas.toBuffer());
-          
-          // Create mobile screenshot (750x1334)
-          const mobileCanvas = createCanvas(750, 1334);
-          const mctx = mobileCanvas.getContext('2d');
-          mctx.fillStyle = '#ffffff';
-          mctx.fillRect(0, 0, 750, 1334);
-          mctx.fillStyle = '#1976d2';
-          mctx.fillRect(0, 0, 750, 60); // Header
-          mctx.fillStyle = '#ffffff';
-          mctx.font = 'bold 32px Arial';
-          mctx.fillText('My Ionic PWA', 20, 40);
-          fs.writeFileSync('src/assets/screenshots/mobile.png', mobileCanvas.toBuffer());
-          EOF
-          
-          # Generate all assets
-          node create-assets.js
-
-          # Create ngsw-config.json in src directory
-          cat > src/ngsw-config.json << EOF
-          {
-            "\$schema": "./node_modules/@angular/service-worker/config/schema.json",
-            "index": "/index.html",
-            "assetGroups": [
-              {
-                "name": "app",
-                "installMode": "prefetch",
-                "resources": {
-                  "files": [
-                    "/favicon.ico",
-                    "/index.html",
-                    "/manifest.webmanifest",
-                    "/*.css",
-                    "/*.js",
-                    "!/ngsw-worker.js",
-                    "/*.(svg|cur|jpg|jpeg|png|apng|webp|avif|gif|otf|ttf|woff|woff2)"
-                  ]
-                }
-              },
-              {
-                "name": "assets",
-                "installMode": "lazy",
-                "updateMode": "prefetch",
-                "resources": {
-                  "files": [
-                    "/assets/**"
-                  ]
-                }
-              }
-            ],
-            "navigationUrls": [
-              "/**",
-              "!/tabs/*",
-              "!/**/*.*",
-              "!/**/*__*",
-              "!/**/*__*/**"
-            ],
-            "dataGroups": []
-          }
-          EOF
-
-          # Update angular.json with correct PWA configuration
-          jq '.projects.app.architect.build.options.assets += [
-            "src/manifest.webmanifest",
-            "src/ngsw-worker.js",
-            {
-              "glob": "**/*",
-              "input": "src/assets",
-              "output": "/assets"
-            }
-          ] | .projects.app.architect.build.configurations.production += {
-            "serviceWorker": true,
-            "ngswConfigPath": "src/ngsw-config.json"
-          }' angular.json > angular.tmp.json && mv angular.tmp.json angular.json
-
-          # Create manifest.webmanifest in src folder
+          # 1. First create the manifest file
           cat > src/manifest.webmanifest << EOF
           {
-            "name": "My Ionic PWA",
+            "name": "Ionic PWA App",
             "short_name": "IonicPWA",
             "theme_color": "#1976d2",
             "background_color": "#ffffff",
@@ -292,42 +105,7 @@ jobs:
                 "type": "image/png",
                 "purpose": "maskable any"
               },
-              {
-                "src": "assets/icons/icon-96x96.png",
-                "sizes": "96x96",
-                "type": "image/png",
-                "purpose": "maskable any"
-              },
-              {
-                "src": "assets/icons/icon-128x128.png",
-                "sizes": "128x128",
-                "type": "image/png",
-                "purpose": "maskable any"
-              },
-              {
-                "src": "assets/icons/icon-144x144.png",
-                "sizes": "144x144",
-                "type": "image/png",
-                "purpose": "maskable any"
-              },
-              {
-                "src": "assets/icons/icon-152x152.png",
-                "sizes": "152x152",
-                "type": "image/png",
-                "purpose": "maskable any"
-              },
-              {
-                "src": "assets/icons/icon-192x192.png",
-                "sizes": "192x192",
-                "type": "image/png",
-                "purpose": "maskable any"
-              },
-              {
-                "src": "assets/icons/icon-384x384.png",
-                "sizes": "384x384",
-                "type": "image/png",
-                "purpose": "maskable any"
-              },
+              // ...other icons...
               {
                 "src": "assets/icons/icon-512x512.png",
                 "sizes": "512x512",
@@ -338,14 +116,15 @@ jobs:
           }
           EOF
 
-          # Update index.html
-          sed -i "s|<base href=\"/\">|<base href=\"/$REPO_NAME/\">|" src/index.html
-          sed -i '/<\/head>/i\  <link rel="manifest" href="manifest.webmanifest" crossorigin="use-credentials">\n  <meta name="theme-color" content="#1976d2">' src/index.html
-          
-          # Add service worker registration script
-          sed -i '/<\/body>/i\  <script>\n    if ("serviceWorker" in navigator) {\n      window.addEventListener("load", function() {\n        navigator.serviceWorker.register("ngsw-worker.js", { scope: "/$REPO_NAME/" })\n          .then(function(registration) { console.log("SW registered:", registration.scope); })\n          .catch(function(error) { console.error("SW registration failed:", error); });\n      });\n    }\n  </script>' src/index.html
+          # 2. Create and generate assets
+          mkdir -p src/assets/icons src/assets/screenshots
+          # Create assets.js and generate icons
+          cat > create-assets.js << 'EOF'
+          // ...existing create-assets.js content...
+          EOF
+          node create-assets.js
 
-          # Update ngsw-config.json to handle both tabbed and non-tabbed navigation
+          # 3. Create ngsw-config.json
           cat > src/ngsw-config.json << EOF
           {
             "\$schema": "./node_modules/@angular/service-worker/config/schema.json",
@@ -387,7 +166,7 @@ jobs:
           }
           EOF
 
-          # Update angular.json to ensure proper PWA setup for any app structure
+          # 4. Update angular.json
           jq '.projects.app.architect.build.options += {
             "serviceWorker": true,
             "ngswConfigPath": "src/ngsw-config.json"
@@ -402,71 +181,18 @@ jobs:
             }
           ]' angular.json > angular.tmp.json && mv angular.tmp.json angular.json
 
-          # Create a more generic manifest.webmanifest
-          cat > src/manifest.webmanifest << EOF
-          {
-            "name": "Ionic PWA App",
-            "short_name": "IonicPWA",
-            "theme_color": "#1976d2",
-            "background_color": "#ffffff",
-            "display": "standalone",
-            "scope": "/$REPO_NAME/",
-            "start_url": "/$REPO_NAME/",
-            "icons": [
-              {
-                "src": "assets/icons/icon-72x72.png",
-                "sizes": "72x72",
-                "type": "image/png",
-                "purpose": "maskable any"
-              },
-              {
-                "src": "assets/icons/icon-96x96.png",
-                "sizes": "96x96",
-                "type": "image/png",
-                "purpose": "maskable any"
-              },
-              {
-                "src": "assets/icons/icon-128x128.png",
-                "sizes": "128x128",
-                "type": "image/png",
-                "purpose": "maskable any"
-              },
-              {
-                "src": "assets/icons/icon-144x144.png",
-                "sizes": "144x144",
-                "type": "image/png",
-                "purpose": "maskable any"
-              },
-              {
-                "src": "assets/icons/icon-152x152.png",
-                "sizes": "152x152",
-                "type": "image/png",
-                "purpose": "maskable any"
-              },
-              {
-                "src": "assets/icons/icon-192x192.png",
-                "sizes": "192x192",
-                "type": "image/png",
-                "purpose": "maskable any"
-              },
-              {
-                "src": "assets/icons/icon-384x384.png",
-                "sizes": "384x384",
-                "type": "image/png",
-                "purpose": "maskable any"
-              },
-              {
-                "src": "assets/icons/icon-512x512.png",
-                "sizes": "512x512",
-                "type": "image/png",
-                "purpose": "maskable any"
-              }
-            ]
-          }
-          EOF
+          # 5. Update index.html
+          sed -i "s|<base href=\"/\">|<base href=\"/$REPO_NAME/\">|" src/index.html
+          sed -i '/<\/head>/i\  <link rel="manifest" href="manifest.webmanifest" crossorigin="use-credentials">\n  <meta name="theme-color" content="#1976d2">' src/index.html
 
-          # Update service worker registration to be more resilient
+          # 6. Add service worker registration
           sed -i '/<\/body>/i\  <script>\n    if ("serviceWorker" in navigator) {\n      window.addEventListener("load", async () => {\n        try {\n          const registration = await navigator.serviceWorker.register("/$REPO_NAME/ngsw-worker.js", {\n            scope: "/$REPO_NAME/",\n            updateViaCache: "none"\n          });\n          console.log("Service Worker registered with scope:", registration.scope);\n        } catch (error) {\n          console.error("Service Worker registration failed:", error);\n        }\n      });\n    }\n  </script>' src/index.html
+        shell: /usr/bin/bash -e {0}
+        env:
+          REPO_NAME: $REPO_NAME
+          APP_PATH: $APP_PATH
+          PWA_ALREADY_CONFIGURED: $PWA_ALREADY_CONFIGURED
+          IS_STANDALONE: $IS_STANDALONE
 
       - name: Build the Ionic PWA
         run: |

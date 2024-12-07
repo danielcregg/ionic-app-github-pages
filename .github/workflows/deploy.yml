@@ -79,23 +79,43 @@ jobs:
         run: |
           cd $APP_PATH
 
+          # Install ImageMagick first
+          sudo apt-get update && sudo apt-get install -y imagemagick
+
+          # Configure ImageMagick policy to allow operations
+          sudo sed -i 's/<policy domain="coder" rights="none" pattern="PDF" \/>/<policy domain="coder" rights="read|write" pattern="PDF" \/>/' /etc/ImageMagick-6/policy.xml
+
           # Create icons directory
           mkdir -p src/assets/icons
 
-          # Generate PWA icons from resources/icon.png if it exists, otherwise use a default icon
+          # Create a base64 default icon if needed
+          BASE64_ICON="iVBORw0KGgoAAAANSUhEUgAAAgAAAAIAAQMAAADOtka5AAAABlBMVEX///8AAABVwtN+AAACC0lEQVR42u3bO3LjMBCE4cYtX8VX0dV4NR9FV+NVvAp8kLWcSguQmOkG8H9hJ3irmGKrh8MwDMMwDMMwDMMwDMMwDMMwDMMwDMMwDLO7+b7/GV3e3+N0jfP1reX7PLzG+M7/MY7XP5bxp8s4v3+JfRnH6T3OcHhEYFjW4TQ+p2OcEdht/x9eEbgD6P4I3AH0eATuAHo4AncAPRqBw/+Wh1cEpnV4jI/xNSKw1/7PEdiuD28I7LX/SwT22v8tAt3v/x6B7vf/iED3+z9FoPv9XyLQ/f7vEeh+/48IdL//MwLd7/8age73/xaB7vf/HoHu9/8Rge73/xyB7vf/GoHu9/8ege73/zMC3e//VwS63/+vCHS//2n7//sE/ncAHSNwB9AxAncAHSJwB9A+AncA7SJwB9AmAncAbSNwB9AmAoef7f/7CN63P07XOF/fWr7Pw2uM7/wf43j9Yxl/uozz+5fYl3GcYv9nBG4Duj8CdwA9HoE7gB6OwB1Aj0bgDqBHI3D43/LwisCyDo/xMb5GBLba/zkCW/XhDYGt9n+JwFb7v0Wg+/3fI9D9/h8R6H7/pwh0v/9LBLrf/y0C3e//HoHu9/8Rge73f45A9/t/jUD3+3+LQPf7/x6B7vf/MQLd7/9XBLrf/68IdL//0/b/9wn87wA6RuAOoGME7gA6ROAOoH0E7gDaReAOoE0E7gDaRuAOoE0EDj/b//cReN/+OAzDMAzDMAzDMAzDMOwP8xeV2aaBy4KWqwAAAABJRU5ErkJggg=="
+
+          # Generate PWA icons from resources/icon.png if it exists
           if [ -f "resources/icon.png" ]; then
             SOURCE_ICON="resources/icon.png"
           elif [ -f "src/assets/icon/favicon.png" ]; then
             SOURCE_ICON="src/assets/icon/favicon.png"
           else
-            # Create a default icon if none exists
-            convert -size 512x512 xc:white -font Arial -pointsize 40 -gravity center -draw "text 0,0 'PWA'" PNG24:src/assets/icons/default-icon.png
+            # Create a default icon from base64
+            echo "$BASE64_ICON" | base64 -d > src/assets/icons/default-icon.png
             SOURCE_ICON="src/assets/icons/default-icon.png"
           fi
 
-          # Generate various icon sizes
+          # Generate various icon sizes with error handling
           for size in 72 96 128 144 152 192 384 512; do
-            convert "$SOURCE_ICON" -resize ${size}x${size} src/assets/icons/icon-${size}x${size}.png
+            if ! convert "$SOURCE_ICON" -resize ${size}x${size} -background none -gravity center -extent ${size}x${size} src/assets/icons/icon-${size}x${size}.png; then
+              echo "Failed to generate ${size}x${size} icon, using default"
+              echo "$BASE64_ICON" | base64 -d | convert - -resize ${size}x${size} src/assets/icons/icon-${size}x${size}.png
+            fi
+          done
+
+          # Verify icons were created
+          for size in 72 96 128 144 152 192 384 512; do
+            if [ ! -f "src/assets/icons/icon-${size}x${size}.png" ]; then
+              echo "ERROR: Failed to create icon-${size}x${size}.png"
+              exit 1
+            fi
           done
 
           # Create manifest.webmanifest with all icon sizes
@@ -160,9 +180,6 @@ jobs:
             ]
           }
           EOF
-
-          # Install ImageMagick for icon generation
-          sudo apt-get update && sudo apt-get install -y imagemagick
 
           # 3. Create ngsw-config.json
           cat > src/ngsw-config.json << EOF

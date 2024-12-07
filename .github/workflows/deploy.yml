@@ -52,6 +52,11 @@ jobs:
       - name: Install Angular CLI
         run: npm install -g @angular/cli
 
+      - name: Install Angular Service Worker
+        run: |
+          cd $APP_PATH
+          npm install @angular/service-worker
+
       - name: Check if PWA is already configured
         run: |
           cd $APP_PATH
@@ -281,14 +286,33 @@ jobs:
         run: |
           cd $APP_PATH
           
-          # Ensure production environment
+          # Ensure production environment exists first
           mkdir -p src/environments
-          echo "export const environment = { production: true };" > src/environments/environment.prod.ts
+          cat > src/environments/environment.ts << EOF
+          export const environment = {
+            production: false
+          };
+          EOF
+          
+          cat > src/environments/environment.prod.ts << EOF
+          export const environment = {
+            production: true
+          };
+          EOF
+          
+          # Add environment import to main.ts if not exists
+          if ! grep -q "import { environment } from './environments/environment'" src/main.ts; then
+            sed -i '1i import { environment } from "./environments/environment";' src/main.ts
+          fi
           
           # Update main.ts to include service worker
           if ! grep -q "provideServiceWorker" src/main.ts; then
             sed -i '/import { routes } from/i import { provideServiceWorker } from "@angular/service-worker";' src/main.ts
-            sed -i '/providers: \[/a\    provideServiceWorker("ngsw-worker.js", { enabled: environment.production }),' src/main.ts
+            if [ "$IS_STANDALONE" = "true" ]; then
+              sed -i '/providers: \[/a\    provideServiceWorker("ngsw-worker.js", { enabled: environment.production }),' src/main.ts
+            else
+              sed -i '/imports: \[/a\    ServiceWorkerModule.register("ngsw-worker.js", { enabled: environment.production }),' src/main.ts
+            fi
           fi
           
           # Build the app with PWA support

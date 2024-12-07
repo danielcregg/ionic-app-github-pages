@@ -46,18 +46,14 @@ jobs:
           cd $APP_PATH
           npm ci
 
-      - name: Install Ionic CLI
-        run: npm install -g @ionic/cli
-
-      - name: Install Angular CLI
-        run: npm install -g @angular/cli
+      - name: Install Global CLI Tools
+        run: |
+          npm install -g @ionic/cli @angular/cli
 
       - name: Install Angular Service Worker
         run: |
           cd $APP_PATH
-          # Get Angular core version and install matching service worker
           ANGULAR_VERSION=$(node -p "require('./node_modules/@angular/core/package.json').version")
-          echo "Installing @angular/service-worker@${ANGULAR_VERSION}"
           npm install @angular/service-worker@${ANGULAR_VERSION}
 
       - name: Check if PWA is already configured
@@ -77,18 +73,13 @@ jobs:
           else
             echo "IS_STANDALONE=false" >> $GITHUB_ENV
           fi
-        shell: /usr/bin/bash -e {0}
-        env:
-          REPO_NAME: ${{ env.REPO_NAME }}
-          APP_PATH: ${{ env.APP_PATH }}
-          PWA_ALREADY_CONFIGURED: ${{ env.PWA_ALREADY_CONFIGURED }}
 
       - name: Add PWA support if not configured
         if: ${{ env.PWA_ALREADY_CONFIGURED == 'false' }}
         run: |
           cd $APP_PATH
 
-          # 1. First create the manifest file
+          # 1. Create the manifest file
           cat > src/manifest.webmanifest << EOF
           {
             "name": "Ionic PWA App",
@@ -105,7 +96,6 @@ jobs:
                 "type": "image/png",
                 "purpose": "maskable any"
               },
-              // ...other icons...
               {
                 "src": "assets/icons/icon-512x512.png",
                 "sizes": "512x512",
@@ -116,13 +106,10 @@ jobs:
           }
           EOF
 
-          # 2. Create and generate assets
-          mkdir -p src/assets/icons src/assets/screenshots
-          # Create assets.js and generate icons
-          cat > create-assets.js << 'EOF'
-          // ...existing create-assets.js content...
-          EOF
-          node create-assets.js
+          # 2. Create icons directory and sample icons
+          mkdir -p src/assets/icons
+          cp src/assets/icon/favicon.png src/assets/icons/icon-72x72.png 2>/dev/null || :
+          cp src/assets/icon/favicon.png src/assets/icons/icon-512x512.png 2>/dev/null || :
 
           # 3. Create ngsw-config.json
           cat > src/ngsw-config.json << EOF
@@ -171,7 +158,9 @@ jobs:
             "serviceWorker": true,
             "ngswConfigPath": "src/ngsw-config.json"
           } | .projects.app.architect.build.configurations.production += {
-            "serviceWorker": true
+            "serviceWorker": true,
+            "baseHref": "/'$REPO_NAME'/",
+            "deployUrl": "/'$REPO_NAME'/"
           } | .projects.app.architect.build.options.assets += [
             "src/manifest.webmanifest",
             {
@@ -186,109 +175,61 @@ jobs:
           sed -i '/<\/head>/i\  <link rel="manifest" href="manifest.webmanifest" crossorigin="use-credentials">\n  <meta name="theme-color" content="#1976d2">' src/index.html
 
           # 6. Add service worker registration
-          sed -i '/<\/body>/i\  <script>\n    if ("serviceWorker" in navigator) {\n      window.addEventListener("load", async () => {\n        try {\n          const registration = await navigator.serviceWorker.register("/$REPO_NAME/ngsw-worker.js", {\n            scope: "/$REPO_NAME/",\n            updateViaCache: "none"\n          });\n          console.log("Service Worker registered with scope:", registration.scope);\n        } catch (error) {\n          console.error("Service Worker registration failed:", error);\n        }\n      });\n    }\n  </script>' src/index.html
-        shell: /usr/bin/bash -e {0}
-        env:
-          REPO_NAME: $REPO_NAME
-          APP_PATH: $APP_PATH
-          PWA_ALREADY_CONFIGURED: $PWA_ALREADY_CONFIGURED
-          IS_STANDALONE: $IS_STANDALONE
+          sed -i '/<\/body>/i\  <script>\n    if ("serviceWorker" in navigator) {\n      window.addEventListener("load", function() {\n        navigator.serviceWorker.register("ngsw-worker.js")\n          .then(function(registration) {\n            console.log("Service Worker registered with scope:", registration.scope);\n          })\n          .catch(function(error) {\n            console.error("Service Worker registration failed:", error);\n          });\n      });\n    }\n  </script>' src/index.html
 
       - name: Build the Ionic PWA
         run: |
           cd $APP_PATH
-          
-          # Ensure production environment exists first
+
+          # Ensure environments directory exists
           mkdir -p src/environments
+
+          # Create environment files
           cat > src/environments/environment.ts << EOF
           export const environment = {
             production: false
           };
           EOF
-          
+
           cat > src/environments/environment.prod.ts << EOF
           export const environment = {
             production: true
           };
           EOF
-          
-          # Add environment import to main.ts if not exists
-          if ! grep -q "import { environment } from './environments/environment'" src/main.ts; then
-            sed -i '1i import { environment } from "./environments/environment";' src/main.ts
+
+          # Modify main.ts to include environment and service worker
+          if ! grep -q "import { environment } from './environments/environment';" src/main.ts; then
+            sed -i "1i import { environment } from './environments/environment';" src/main.ts
           fi
-          
-          # Update main.ts to include service worker
-          if ! grep -q "provideServiceWorker" src/main.ts; then
-            sed -i '1i import { provideServiceWorker } from "@angular/service-worker";' src/main.ts
-            if [ "$IS_STANDALONE" = "true" ]; then
-              sed -i '/providers: \[/a\    provideServiceWorker("ngsw-worker.js", { enabled: environment.production }),\n    { provide: "BASE_URL", useValue: "/$REPO_NAME/" },' src/main.ts
-            else
-              sed -i '/imports: \[/a\    ServiceWorkerModule.register("ngsw-worker.js", { enabled: environment.production, registrationStrategy: "registerWhenStable:30000" }),' src/main.ts
+
+          if [ "$IS_STANDALONE" = "true" ]; then
+            if ! grep -q "provideServiceWorker" src/main.ts; then
+              sed -i "s/providers: \[/providers: [provideServiceWorker('ngsw-worker.js', { enabled: environment.production }),/" src/main.ts
+              sed -i "1i import { provideServiceWorker } from '@angular/service-worker';" src/main.ts
+            fi
+          else
+            if ! grep -q "ServiceWorkerModule.register" src/app/app.module.ts; then
+              sed -i "s/imports: \[/imports: [ServiceWorkerModule.register('ngsw-worker.js', { enabled: environment.production }),/" src/app/app.module.ts
+              sed -i "1i import { ServiceWorkerModule } from '@angular/service-worker';" src/app/app.module.ts
+              sed -i "1i import { environment } from '../environments/environment';" src/app/app.module.ts
             fi
           fi
-          
-          # Ensure manifest.webmanifest is copied to output
-          cp src/manifest.webmanifest www/manifest.webmanifest 2>/dev/null || :
-          
+
           # Build the app with PWA support
-          ng build \
-            --configuration=production \
-            --base-href="/$REPO_NAME/" \
-            --deploy-url="/$REPO_NAME/"
-          
+          ionic build --prod
+
           # Post-build fixes for PWA
           cd www
           cp index.html 404.html
-          
-          # Create manifest if it doesn't exist
-          if [ ! -f "manifest.webmanifest" ]; then
-            cat > manifest.webmanifest << EOF
-          {
-            "name": "Ionic PWA App",
-            "short_name": "IonicPWA",
-            "theme_color": "#1976d2",
-            "background_color": "#ffffff",
-            "display": "standalone",
-            "scope": "/$REPO_NAME/",
-            "start_url": "/$REPO_NAME/",
-            "icons": [
-              {
-                "src": "assets/icons/icon-72x72.png",
-                "sizes": "72x72",
-                "type": "image/png",
-                "purpose": "maskable any"
-              },
-              {
-                "src": "assets/icons/icon-512x512.png",
-                "sizes": "512x512",
-                "type": "image/png",
-                "purpose": "maskable any"
-              }
-            ]
-          }
-          EOF
-          fi
-
-          # Ensure ngsw-worker.js is present
-          if [ ! -f "ngsw-worker.js" ]; then
-            cp ../node_modules/@angular/service-worker/ngsw-worker.js .
-          fi
-          
-          # Update manifest paths
-          if [ -f "manifest.webmanifest" ]; then
-            sed -i "s|\"./|\"/$REPO_NAME/|g" manifest.webmanifest
-          fi
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
-        with:
-          enablement: pages
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v1
         with:
           path: '${{ env.APP_PATH }}/www'
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v1

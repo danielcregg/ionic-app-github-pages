@@ -88,6 +88,72 @@ jobs:
         run: |
           cd $APP_PATH
 
+          # Update angular.json first to ensure proper PWA configuration
+          jq '.projects.app.architect.build += {
+            "options": {
+              "serviceWorker": true,
+              "ngswConfigPath": "src/ngsw-config.json"
+            }
+          } | .projects.app.architect.build.configurations.production += {
+            "serviceWorker": true
+          } | .projects.app.architect.build.options.assets += [
+            "src/manifest.webmanifest",
+            {
+              "glob": "**/*",
+              "input": "src/assets",
+              "output": "/assets/"
+            },
+            {
+              "glob": "ngsw-worker.js",
+              "input": "node_modules/@angular/service-worker",
+              "output": "/"
+            }
+          ]' angular.json > angular.tmp.json && mv angular.tmp.json angular.json
+
+          # Move manifest to src root and update paths
+          cp src/manifest.webmanifest src/manifest.webmanifest.template
+          sed "s|/$REPO_NAME/|./|g" src/manifest.webmanifest.template > src/manifest.webmanifest
+          
+          # Update service worker config paths
+          sed -i 's|"scope": "/$REPO_NAME/"|"scope": "./"|g' src/manifest.webmanifest
+          sed -i 's|"start_url": "/$REPO_NAME/"|"start_url": "./"|g' src/manifest.webmanifest
+
+          # Update ngsw-config.json paths
+          cat > src/ngsw-config.json << EOF
+          {
+            "\$schema": "./node_modules/@angular/service-worker/config/schema.json",
+            "index": "./index.html",
+            "assetGroups": [
+              {
+                "name": "app",
+                "installMode": "prefetch",
+                "resources": {
+                  "files": [
+                    "./favicon.ico",
+                    "./index.html",
+                    "./manifest.webmanifest",
+                    "./*.css",
+                    "./*.js"
+                  ],
+                  "urls": [
+                    "https://fonts.googleapis.com/**"
+                  ]
+                }
+              },
+              {
+                "name": "assets",
+                "installMode": "lazy",
+                "updateMode": "prefetch",
+                "resources": {
+                  "files": [
+                    "./assets/**"
+                  ]
+                }
+              }
+            ]
+          }
+          EOF
+
           # Get Angular core version and install dependencies
           ANGULAR_CORE_VERSION=$(node -p "require('./node_modules/@angular/core/package.json').version")
           echo "Detected installed @angular/core version is $ANGULAR_CORE_VERSION"
@@ -278,12 +344,129 @@ jobs:
           
           # Add service worker registration script
           sed -i '/<\/body>/i\  <script>\n    if ("serviceWorker" in navigator) {\n      window.addEventListener("load", function() {\n        navigator.serviceWorker.register("ngsw-worker.js", { scope: "/$REPO_NAME/" })\n          .then(function(registration) { console.log("SW registered:", registration.scope); })\n          .catch(function(error) { console.error("SW registration failed:", error); });\n      });\n    }\n  </script>' src/index.html
-        shell: /usr/bin/bash -e {0}
-        env:
-          REPO_NAME: $REPO_NAME
-          APP_PATH: $APP_PATH
-          PWA_ALREADY_CONFIGURED: $PWA_ALREADY_CONFIGURED
-          IS_STANDALONE: $IS_STANDALONE
+
+          # Update ngsw-config.json to handle both tabbed and non-tabbed navigation
+          cat > src/ngsw-config.json << EOF
+          {
+            "\$schema": "./node_modules/@angular/service-worker/config/schema.json",
+            "index": "/index.html",
+            "assetGroups": [
+              {
+                "name": "app",
+                "installMode": "prefetch",
+                "resources": {
+                  "files": [
+                    "/favicon.ico",
+                    "/index.html",
+                    "/manifest.webmanifest",
+                    "/*.css",
+                    "/*.js",
+                    "!/ngsw-worker.js"
+                  ]
+                }
+              },
+              {
+                "name": "assets",
+                "installMode": "lazy",
+                "updateMode": "prefetch",
+                "resources": {
+                  "files": [
+                    "/assets/**",
+                    "/*.(svg|cur|jpg|jpeg|png|apng|webp|avif|gif|otf|ttf|woff|woff2)"
+                  ]
+                }
+              }
+            ],
+            "navigationUrls": [
+              "/**",
+              "!/**/*.{js,css,json,jpg,jpeg,png,gif,webp,ico,woff,woff2}",
+              "!/**/*__*",
+              "!/**/*__*/**"
+            ],
+            "dataGroups": []
+          }
+          EOF
+
+          # Update angular.json to ensure proper PWA setup for any app structure
+          jq '.projects.app.architect.build.options += {
+            "serviceWorker": true,
+            "ngswConfigPath": "src/ngsw-config.json"
+          } | .projects.app.architect.build.configurations.production += {
+            "serviceWorker": true
+          } | .projects.app.architect.build.options.assets += [
+            "src/manifest.webmanifest",
+            {
+              "glob": "ngsw-worker.js",
+              "input": "node_modules/@angular/service-worker",
+              "output": "/"
+            }
+          ]' angular.json > angular.tmp.json && mv angular.tmp.json angular.json
+
+          # Create a more generic manifest.webmanifest
+          cat > src/manifest.webmanifest << EOF
+          {
+            "name": "Ionic PWA App",
+            "short_name": "IonicPWA",
+            "theme_color": "#1976d2",
+            "background_color": "#ffffff",
+            "display": "standalone",
+            "scope": "/$REPO_NAME/",
+            "start_url": "/$REPO_NAME/",
+            "icons": [
+              {
+                "src": "assets/icons/icon-72x72.png",
+                "sizes": "72x72",
+                "type": "image/png",
+                "purpose": "maskable any"
+              },
+              {
+                "src": "assets/icons/icon-96x96.png",
+                "sizes": "96x96",
+                "type": "image/png",
+                "purpose": "maskable any"
+              },
+              {
+                "src": "assets/icons/icon-128x128.png",
+                "sizes": "128x128",
+                "type": "image/png",
+                "purpose": "maskable any"
+              },
+              {
+                "src": "assets/icons/icon-144x144.png",
+                "sizes": "144x144",
+                "type": "image/png",
+                "purpose": "maskable any"
+              },
+              {
+                "src": "assets/icons/icon-152x152.png",
+                "sizes": "152x152",
+                "type": "image/png",
+                "purpose": "maskable any"
+              },
+              {
+                "src": "assets/icons/icon-192x192.png",
+                "sizes": "192x192",
+                "type": "image/png",
+                "purpose": "maskable any"
+              },
+              {
+                "src": "assets/icons/icon-384x384.png",
+                "sizes": "384x384",
+                "type": "image/png",
+                "purpose": "maskable any"
+              },
+              {
+                "src": "assets/icons/icon-512x512.png",
+                "sizes": "512x512",
+                "type": "image/png",
+                "purpose": "maskable any"
+              }
+            ]
+          }
+          EOF
+
+          # Update service worker registration to be more resilient
+          sed -i '/<\/body>/i\  <script>\n    if ("serviceWorker" in navigator) {\n      window.addEventListener("load", async () => {\n        try {\n          const registration = await navigator.serviceWorker.register("/$REPO_NAME/ngsw-worker.js", {\n            scope: "/$REPO_NAME/",\n            updateViaCache: "none"\n          });\n          console.log("Service Worker registered with scope:", registration.scope);\n        } catch (error) {\n          console.error("Service Worker registration failed:", error);\n        }\n      });\n    }\n  </script>' src/index.html
 
       - name: Build the Ionic PWA
         run: |
@@ -310,11 +493,11 @@ jobs:
           
           # Update main.ts to include service worker
           if ! grep -q "provideServiceWorker" src/main.ts; then
-            sed -i '/import { routes } from/i import { provideServiceWorker } from "@angular/service-worker";' src/main.ts
+            sed -i '1i import { provideServiceWorker } from "@angular/service-worker";' src/main.ts
             if [ "$IS_STANDALONE" = "true" ]; then
-              sed -i '/providers: \[/a\    provideServiceWorker("ngsw-worker.js", { enabled: environment.production }),' src/main.ts
+              sed -i '/providers: \[/a\    provideServiceWorker("ngsw-worker.js", { enabled: environment.production }),\n    { provide: "BASE_URL", useValue: "/$REPO_NAME/" },' src/main.ts
             else
-              sed -i '/imports: \[/a\    ServiceWorkerModule.register("ngsw-worker.js", { enabled: environment.production }),' src/main.ts
+              sed -i '/imports: \[/a\    ServiceWorkerModule.register("ngsw-worker.js", { enabled: environment.production, registrationStrategy: "registerWhenStable:30000" }),' src/main.ts
             fi
           fi
           
@@ -324,9 +507,15 @@ jobs:
             --base-href="/$REPO_NAME/" \
             --deploy-url="/$REPO_NAME/"
           
-          # Post-build fixes
+          # Post-build fixes for PWA
           cd www
           cp index.html 404.html
+          # Ensure ngsw-worker.js is present
+          if [ ! -f "ngsw-worker.js" ]; then
+            cp ../node_modules/@angular/service-worker/ngsw-worker.js .
+          fi
+          # Update manifest paths post-build
+          sed -i "s|\"./|\"/$REPO_NAME/|g" manifest.webmanifest
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

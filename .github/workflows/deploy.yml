@@ -40,6 +40,23 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: '${{ env.APP_PATH }}/package-lock.json'
+
+      - name: Cache Angular and Ionic build
+        uses: actions/cache@v3
+        with:
+          path: |
+            ${{ env.APP_PATH }}/.angular/cache
+            ${{ env.APP_PATH }}/www
+            ${{ env.APP_PATH }}/platforms
+            ${{ env.APP_PATH }}/plugins
+            ${{ env.APP_PATH }}/.sourcemaps
+            ${{ env.APP_PATH }}/node_modules/.cache
+          key: ${{ runner.os }}-ionic-build-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('**/*.[jt]s', '**/*.[cm]ss', '**/*.html') }}
+          restore-keys: |
+            ${{ runner.os }}-ionic-build-${{ hashFiles('**/package-lock.json') }}-
+            ${{ runner.os }}-ionic-build-
 
       - name: Install Dependencies
         run: |

@@ -288,21 +288,21 @@ jobs:
           # Build the app with PWA support
           ionic build --prod
 
-          # Post-build fixes for PWA
+          # Post-build fixes for PWA and routing
           cd www
           cp index.html 404.html
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v1
-        with:
-          path: '${{ env.APP_PATH }}/www'
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v1
+          # Add routing handler to 404.html
+          sed -i '/<head>/a\
+          <script>\
+            (function() {\
+              var redirect = sessionStorage.redirect;\
+              delete sessionStorage.redirect;\
+              if (redirect && redirect != location.href) {\
+                history.replaceState(null, null, redirect);\
+              }\
+            })();\
+          </script>' 404.html
 
           # Add routing handler to index.html
           sed -i '/<head>/a\

@@ -55,7 +55,10 @@ jobs:
       - name: Install Angular Service Worker
         run: |
           cd $APP_PATH
-          npm install @angular/service-worker
+          # Get Angular core version and install matching service worker
+          ANGULAR_VERSION=$(node -p "require('./node_modules/@angular/core/package.json').version")
+          echo "Installing @angular/service-worker@${ANGULAR_VERSION}"
+          npm install @angular/service-worker@${ANGULAR_VERSION}
 
       - name: Check if PWA is already configured
         run: |

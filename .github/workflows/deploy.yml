@@ -219,13 +219,16 @@ jobs:
           
           # Update main.ts to include service worker
           if ! grep -q "provideServiceWorker" src/main.ts; then
-            sed -i '1i import { provideServiceWorker } from "@angular/service-worker";' src/main.ts
+            sed -i '1i import { provideServiceWorker } from "@angular/service-worker";' src.main.ts
             if [ "$IS_STANDALONE" = "true" ]; then
               sed -i '/providers: \[/a\    provideServiceWorker("ngsw-worker.js", { enabled: environment.production }),\n    { provide: "BASE_URL", useValue: "/$REPO_NAME/" },' src/main.ts
             else
               sed -i '/imports: \[/a\    ServiceWorkerModule.register("ngsw-worker.js", { enabled: environment.production, registrationStrategy: "registerWhenStable:30000" }),' src/main.ts
             fi
           fi
+          
+          # Ensure manifest.webmanifest is copied to output
+          cp src/manifest.webmanifest www/manifest.webmanifest 2>/dev/null || :
           
           # Build the app with PWA support
           ng build \
@@ -236,12 +239,45 @@ jobs:
           # Post-build fixes for PWA
           cd www
           cp index.html 404.html
+          
+          # Create manifest if it doesn't exist
+          if [ ! -f "manifest.webmanifest" ]; then
+            cat > manifest.webmanifest << EOF
+          {
+            "name": "Ionic PWA App",
+            "short_name": "IonicPWA",
+            "theme_color": "#1976d2",
+            "background_color": "#ffffff",
+            "display": "standalone",
+            "scope": "/$REPO_NAME/",
+            "start_url": "/$REPO_NAME/",
+            "icons": [
+              {
+                "src": "assets/icons/icon-72x72.png",
+                "sizes": "72x72",
+                "type": "image/png",
+                "purpose": "maskable any"
+              },
+              {
+                "src": "assets/icons/icon-512x512.png",
+                "sizes": "512x512",
+                "type": "image/png",
+                "purpose": "maskable any"
+              }
+            ]
+          }
+          EOF
+          fi
+
           # Ensure ngsw-worker.js is present
           if [ ! -f "ngsw-worker.js" ]; then
             cp ../node_modules/@angular/service-worker/ngsw-worker.js .
           fi
-          # Update manifest paths post-build
-          sed -i "s|\"./|\"/$REPO_NAME/|g" manifest.webmanifest
+          
+          # Update manifest paths
+          if [ -f "manifest.webmanifest" ]; then
+            sed -i "s|\"./|\"/$REPO_NAME/|g" manifest.webmanifest
+          fi
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
